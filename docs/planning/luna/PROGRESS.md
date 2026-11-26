@@ -24,7 +24,7 @@
 - [x] `L1.1` `[HUMAN GATE]` Verify PR `#189` full CI green & merge to `main`
 - [x] `L1.2` `[LUNA]` Fix top-right theme button clipping in menu bar (`chrome.rs`)
 - [x] `L1.3` `[LUNA]` Fix narrow-viewport (`960x640`) canvas footer overlap (`chrome.rs`)
-- [ ] `L1.4` `[LUNA]` Eliminate missing-glyph `□` boxes in Layers & Tools footer + visual proof (`panels.rs`, `chrome.rs`)
+- [x] `L1.4` `[LUNA]` Eliminate missing-glyph `□` boxes in Layers & Tools footer + visual proof (`panels.rs`, `chrome.rs`)
 - [ ] `L1.5` `[LUNA]` Real-browser Playwright smoke of CS6 Studio WASM build (`xtask dist --web` + `web/test.spec.ts`)
 
 ## Phase 2 — Full Phosphor Icons Unification (`PHASE-2-PHOSPHOR-ICONS.md`)
@@ -112,6 +112,7 @@
 | 2026-11-26 | `L1.1` | `5a5a1b2c` (squash merge of PR `#189`; head `2c25307e`) | `gh pr checks 189 --repo aliasfoxkde/FireCraft`: exit 0, all required checks passed; screenshot `docs/img/app-main.png` visually inspected at 1440×900; Windows review binary verified as PE32+ GUI, SHA-256 `8fdf2b6db032a84c9b0e0321081963fe71e558a86a638541b77638b4a42f78d6`; merged to `main` |
 | 2026-11-26 | `L1.2` | `84036eda` | `cargo test -p app` (exit 0); `cargo clippy -p app --all-targets -- -D warnings` (exit 0); `cargo run -p xtask -- ci` on Fedora (exit 0); `xvfb-run` 1440×900 and 960×640 captures visually inspected with the top-right theme button fully visible; local Windows review binary is PE32+ GUI, 46,438,975 bytes, SHA-256 `d09b8882578003cf367ab7c0e6f0ac3f3a4a2d8c24eba70903627588a2a9fcf8` |
 | 2026-11-26 | `L1.3` | `3db7e682` | `cargo test -p app` (exit 0; 229 unit tests plus integration tests); `cargo clippy -p app --all-targets -- -D warnings` (exit 0); `cargo run -p xtask -- ci` on Fedora (exit 0); inspected `dist/windows-review/l1-3-{wide,narrow}.png` at 1440×900 and 960×640, with metadata hidden progressively and no footer overlap; local Windows review binary is PE32+ GUI, 46,436,730 bytes, SHA-256 `945d2b66af7b96a40ee7f5c60198d51c11e683e90e933a1e368b798da4f1f5b2` |
+| 2026-11-26 | `L1.4` | `77a69bc4` | `cargo test -p app`, clippy `-D warnings`, `xtask panel-snapshot`, and `xtask aegis` all exit 0; `cargo run -p xtask -- ci` on Fedora exit 0; visually inspected `dist/windows-review/l1-4-{wide,narrow}.png` at 1440×900 and 960×640, no missing-glyph boxes or footer/header overlap; local Windows review binary is PE32+ GUI, 46,433,996 bytes, SHA-256 `7d4d41782be9b114aa72ae9aab4968895edb598abb60d2f1ba264033ccc01ed8` |
 
 ## Resolved Blockers & Escalations
 - `L1.1` escalation resolved (2026-11-26): after the two logged Fedora failures (`56ef5c6f`, missing native `FileSystem` trait import; `16987c63`, default-feature clippy rejecting that import), the import was gated to `feature = "native"` in `e049a2f7`. Fedora then exposed an existing destructuring error in `PreviewInBrowser`; binding the two options in native code and explicitly consuming them otherwise fixed it in `fbac2023`. `icon-survey` then exposed a stale generated report, refreshed in `2c25307e`. Fedora `cargo run -p xtask -- ci-no-fmt` passed on `2c25307e`; both GitHub full gates, Windows, macOS, WASM, fmt, CodeQL and classifiers passed. PR `#189` merged by squash as `5a5a1b2c`.
