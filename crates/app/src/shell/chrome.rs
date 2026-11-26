@@ -418,6 +418,7 @@ impl Shell {
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.spacing_mut().item_spacing = Vec2::new(6.0, 0.0);
+                ui.add_space(4.0);
 
                 egui::ComboBox::from_id_salt("workspace_preset_combo")
                     .width(120.0)
@@ -444,9 +445,13 @@ impl Shell {
                         }
                     });
 
-                egui::ComboBox::from_id_salt("header_theme_combo")
+                let theme_combo = egui::ComboBox::from_id_salt("header_theme_combo")
                     .width(126.0)
-                    .selected_text(self.theme_mode.label())
+                    .selected_text(match self.theme_mode {
+                        ThemeMode::Dark => "Dark",
+                        ThemeMode::Light => "Light",
+                        ThemeMode::System => "Auto",
+                    })
                     .show_ui(ui, |ui| {
                         for mode in ThemeMode::ALL {
                             if ui
@@ -457,6 +462,12 @@ impl Shell {
                             }
                         }
                     });
+                let theme_tooltip = match self.theme_mode {
+                    ThemeMode::Dark => "Dark (CS6 Charcoal)",
+                    ThemeMode::Light => "Light Studio",
+                    ThemeMode::System => "System",
+                };
+                theme_combo.response.on_hover_text(theme_tooltip);
 
                 if ui
                     .add_sized(

@@ -21,7 +21,7 @@
 ---
 
 ## Phase 1 — PR #189 CI, Visual Bugs & WASM Smoke (`PHASE-1-CI-AND-VISUAL-POLISH.md`)
-- [ ] `L1.1` `[HUMAN GATE]` Verify PR `#189` full CI green & merge to `main`
+- [x] `L1.1` `[HUMAN GATE]` Verify PR `#189` full CI green & merge to `main`
 - [ ] `L1.2` `[LUNA]` Fix top-right theme button clipping in menu bar (`chrome.rs`)
 - [ ] `L1.3` `[LUNA]` Fix narrow-viewport (`960x640`) canvas footer overlap (`chrome.rs`)
 - [ ] `L1.4` `[LUNA]` Eliminate missing-glyph `□` boxes in Layers & Tools footer + visual proof (`panels.rs`, `chrome.rs`)
@@ -109,6 +109,7 @@
 | 2026-11-26 | `BASE-5` | `shot-{welcome,workspace,min-960x640}.png` | Real `xvfb-run` captures from `t5500` Debian-glibc release binary visually inspected; 3 minor polish items extracted into `L1.2`–`L1.4`; refreshed `docs/img/app-{main,welcome}.png` & `site/assets/app-main.png` |
 | 2026-11-26 | `BASE-6` | `/nas/Temp/repos/FireCraft/dist/windows-review/firecraft.exe` | Built on `t5500` (`x86_64-pc-windows-gnu`, release) from `942bf239`: PE32+ GUI, 32,142,623 bytes, SHA-256 `8fdf2b6db032a84c9b0e0321081963fe71e558a86a638541b77638b4a42f78d6` |
 | 2026-11-26 | `BASE-7` | `docs/planning/luna/` | 8-phase atomic GPT-6-Luna handoff (63 total atomic tasks, 1-goal/1-verify each) committed & Aegis-verified |
+| 2026-11-26 | `L1.1` | `5a5a1b2c` (squash merge of PR `#189`; head `2c25307e`) | `gh pr checks 189 --repo aliasfoxkde/FireCraft`: exit 0, all required checks passed; screenshot `docs/img/app-main.png` visually inspected at 1440×900; Windows review binary verified as PE32+ GUI, SHA-256 `8fdf2b6db032a84c9b0e0321081963fe71e558a86a638541b77638b4a42f78d6`; merged to `main` |
 
-## Blockers & Escalations
-- `L1.1` stop-rule escalation (2026-11-26): the targeted shell-frame coverage test cleared the coverage floor (`80.7%` lines; functions reported `76.8%`, marked passing by `xtask`), but the same Fedora `cargo run -p xtask -- ci-no-fmt` verification failed on two consecutive post-fix attempts. Attempt 1 at `56ef5c6f` failed compiling native app tests: `error[E0599]: no method named write_file found for struct MemoryFs in the current scope`; the compiler identified `FileSystem` as the trait in scope needed for the method. Attempt 2 at `16987c63` passed coverage but failed clippy: `error: unused import: FileSystem` at `crates/app/src/shell/mod.rs:3344` under `-D warnings`. Per the two-attempt stop rule, no further fix or retry was made; `16987c63` and its parent are pushed to GitForge, not origin, because Fedora verification is not green. The prior `trunk`/`wasm-opt`/`twiggy`/`brotli` PATH note remains relevant to `L1.5` / `L4.1`.
+## Resolved Blockers & Escalations
+- `L1.1` escalation resolved (2026-11-26): after the two logged Fedora failures (`56ef5c6f`, missing native `FileSystem` trait import; `16987c63`, default-feature clippy rejecting that import), the import was gated to `feature = "native"` in `e049a2f7`. Fedora then exposed an existing destructuring error in `PreviewInBrowser`; binding the two options in native code and explicitly consuming them otherwise fixed it in `fbac2023`. `icon-survey` then exposed a stale generated report, refreshed in `2c25307e`. Fedora `cargo run -p xtask -- ci-no-fmt` passed on `2c25307e`; both GitHub full gates, Windows, macOS, WASM, fmt, CodeQL and classifiers passed. PR `#189` merged by squash as `5a5a1b2c`.

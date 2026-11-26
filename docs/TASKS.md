@@ -2,6 +2,8 @@
 
 > **GPT-6-Luna Execution Handoff (2026-11-26):** Active step-by-step phased roadmap covering PR `#189` closeout, full **Phosphor Icons** unification, remaining CS6 UI polish (`T29`), WASM/binary size optimization + modular folders (`examples/`, `libraries/`, `extensions/`, lazy `modules/`, `T31`), marketing site/docs/wiki, OS taskbar launchers (`T30`), and `v1.0.0` release engineering lives in [`docs/planning/luna/README.md`](planning/luna/README.md) and [`docs/planning/luna/PROGRESS.md`](planning/luna/PROGRESS.md).
 
+> **Luna execution update (2026-11-26):** PR `#189` passed both GitHub full gates and all platform checks, then merged to `main` as squash commit `5a5a1b2c`; the current ordered task is `L1.2` on `feat/phase1-visual-polish`.
+
 > **Live ledger.** Reconciled against `main` at `b61f198` on 2026-11-11,
 > after the shell-lineage train (#107) and the release-engineering train
 > (#108, merged into the train as `1884c04`) landed, plus the post-train
