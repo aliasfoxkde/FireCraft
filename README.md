@@ -157,6 +157,9 @@ The GUI and automation interfaces are intended to drive the same engine commands
 | [Doc index](docs/README.md) | The full documentation map |
 | [Releasing](docs/RELEASING.md) | Artifact build and deployment procedures |
 | [Marketing site roadmap](docs/MARKETING-SITE-ROADMAP.md) | Public website scope, Cloudflare Pages deployment, and launch gates |
+| [FireCraft 1.0 consolidation and release handoff](docs/planning/FIRECRAFT-1.0-CONSOLIDATION-AND-RELEASE-HANDOFF.md) | MVP integration, feedback, marketing launch, staging, and release execution |
+| [Product expansion roadmap](docs/planning/FIRECRAFT-PRODUCT-ROADMAP-AND-EXPANSION.md) | Future feature horizons and cross-cutting product quality strategy |
+
 | [Creative-app benchmark](docs/research/creative-app-benchmark.md) | Product patterns from Krita, Photopea, and Pixlr, with licensing boundaries |
 | [Progress](docs/PROGRESS.md) | Session-level status and historical progress |
 | [Planning](docs/PLANNING.md) | Product plan, file-format notes, and architecture |
