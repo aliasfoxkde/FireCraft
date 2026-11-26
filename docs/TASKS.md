@@ -205,3 +205,12 @@ progress:
 - Update this file and the ticket when work starts, changes scope, or lands.
 - Keep detailed implementation history in [`SESSIONS.md`](SESSIONS.md); keep host/tooling diagnostics out of the FireCraft session history.
 - Do not copy a second active task list into the handoff or historical audit documents.
+
+
+---
+
+## Strategic planning references (not live tasks)
+
+The [FireCraft 1.0 Consolidation and Release Handoff](planning/FIRECRAFT-1.0-CONSOLIDATION-AND-RELEASE-HANDOFF.md) now includes the marketing landing page as a 1.0 release gate, in-app feedback, staging/release workflow, and documentation synchronization. The [Product Expansion Roadmap](planning/FIRECRAFT-PRODUCT-ROADMAP-AND-EXPANSION.md) organizes future feature horizons and cross-cutting requirements. The [Marketing Site Roadmap](MARKETING-SITE-ROADMAP.md) specifies completion and Cloudflare Pages deployment of the existing site.
+
+These references do not change task status and do not authorize bulk-importing speculative features. After the Phase 0 baseline audit, create or update bounded tickets for owner-approved work only. This file remains the sole live task ledger.
