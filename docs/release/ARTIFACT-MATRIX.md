@@ -300,3 +300,14 @@ these artifacts constitute an acceptable release cut is decided by
 [decision 0075](../decisions/0075-release-scope-mvp.md), which is
 **accepted** (Michael Kinney, 2026-11-17): the approved release scope is
 the MVP candidate scope in that record.
+
+
+---
+
+## Scope change coordination note (2026-11-26)
+
+The artifact rows and their evidence states above remain the evidence record for the snapshot named at the top of this file; this addendum does not upgrade any artifact status.
+
+The owner has requested a broader 1.0 release matrix covering ready-to-use browser/WASM, Windows, macOS and Linux, including AppImage, DEB, Flatpak and re-evaluated RPM, plus CLI/source/integrity artifacts. The sequencing, experiment/GUI integration, README/wiki, website, GitHub issue closeout and final publication are in [FIRECRAFT-1.0-END-TO-END-EXECUTION-AND-RELEASE-CLOSEOUT.md](../planning/FIRECRAFT-1.0-END-TO-END-EXECUTION-AND-RELEASE-CLOSEOUT.md).
+
+Before changing matrix scope/status, create a successor decision that formally reconciles decision 0075 and decision 0070. Then refresh this matrix from current source and actual receipts. Do not convert a recipe-only row to built/installed/launched/smoke-tested/published/certified without its required evidence.
