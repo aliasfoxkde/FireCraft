@@ -1,141 +1,134 @@
-# FireCraft 1.0 — Master Execution Plan, Roadmap & GPT-6-Luna Handoff
+# FireCraft 1.0 — Master Roadmap & GPT-6-Luna Execution Handoff
 
 > **Prepared by:** Neon Forensic Audit & Integration Pass (2026-11-26)
-> **Designed for:** **GPT-6-Luna** (disciplined, instruction-following execution agent working strictly one atomic task card at a time)
-> **Canonical repository:** `/nas/Temp/repos/FireCraft` (`https://github.com/aliasfoxkde/FireCraft`)
-> **Active integration worktree:** `/var/tmp/firecraft-int-1.0` on branch `integration/firecraft-1.0` (PR `#189`)
-> **Read-only UI reference:** `/nas/Temp/repos/FireCraft-CraftAnything-Experiment` *(NEVER edit, reset, or copy proprietary assets from here)*
-> **Authoritative live task ledger:** [`docs/TASKS.md`](../../TASKS.md)
-> **Atomic Luna progress & receipt ledger:** [`docs/planning/luna/PROGRESS.md`](PROGRESS.md)
+> **Target executor:** **GPT-6-Luna** (excels at strictly following narrow, single-goal, verifiable task cards)
+> **Canonical repo & branch:** `/nas/Temp/repos/FireCraft` on branch `integration/firecraft-1.0` (PR `#189`) — all work MUST be committed in the repo and pushed to `gitforge` + `origin` (never keep unversioned work in `/var/tmp`)
+> **Read-only UI reference:** `/nas/Temp/repos/FireCraft-CraftAnything-Experiment` *(NEVER edit or copy proprietary assets)*
+> **Atomic checklist & receipts:** [`PROGRESS.md`](PROGRESS.md) · **Live repo board:** [`docs/TASKS.md`](../../TASKS.md)
 
 ---
 
-## 1. Executive Audit Summary — What Happened & Why Work Was Redirected
+## 1. How GPT-6-Luna Must Work (6-Step Atomic Loop)
 
-A full forensic audit of code, git history, screenshots, CI logs, and prior session directives identified **every root cause of the earlier Hydrogen execution failure** and reconciled **every dropped user request**:
+Work on **1 task card at a time** (at most 2–3 consecutive `[LUNA]` tasks in the same phase per session). **NEVER** cross a `[HUMAN GATE]`.
 
-| Prior User Request / Area | What Happened Under Hydrogen | Status After Neon Audit & Core Fixes | Owner Going Forward |
+1. **Pick next task:** Open [`PROGRESS.md`](PROGRESS.md) and locate the **first `[ ]` task ID** (e.g., `L1.1`).
+2. **Open ONLY that phase file** from the table in §4 below. Read ONLY that task card.
+3. **Run `Pre-check` verbatim.** If output contradicts the card, **STOP** and log it under `Blockers` in `PROGRESS.md`.
+4. **Execute ONLY the listed bullets** in `Do`, touching ONLY the files named in `Files` (unless a compiler error proves an extra file is required).
+5. **Prove runtime wiring + visuals (for any UI / icon / web / site task):**
+   - Confirm live entry points (`Shell::ui()`, `main.rs`, `web/`, `site/`) invoke your change.
+   - Capture real PNG screenshots (`xvfb-run` or Playwright) and **inspect them visually** before marking done.
+6. **Verify, commit, push, log receipt:**
+   - Run `cargo fmt --all`.
+   - Push to `gitforge` first (`git push gitforge <branch>`).
+   - Run the card's `Verify` command verbatim on `ssh fedora` (exit code MUST be `0`).
+   - Push to `origin` once verified green (`git push origin <branch>`).
+   - Mark `[x]` in `PROGRESS.md` + append a 1-line receipt (`Date | Task ID | Commit SHA | Verify result`), and update `docs/TASKS.md` if a tracked item changed.
+
+---
+
+## 2. Non-Negotiable Hard Rules (Anti-Failure Guardrails)
+
+- **No false `[x]`:** Never mark a task complete without exit code `0` on the final commit.
+- **No self-approving `[HUMAN GATE]`:** Always stop and report the exact evidence bundle to the maintainer.
+- **No `rsync` / SSH code sync:** Always `git commit` -> `git push gitforge` (and `origin` when verified) -> `git pull --ff-only` on `fedora` / `t5500`.
+- **No heavy Cargo builds on local `SWARMONE`:** Local host enforces a build lease. Run all Cargo tests, clippy, `xtask`, Linux builds, and WASM builds on `ssh fedora`; run Windows `.exe` builds on `ssh t5500`.
+- **Clean-room & Rust safety (`AGENTS.md`):**
+  - `unsafe_code = "forbid"` everywhere.
+  - Zero `unwrap()`, `expect()`, `panic!()`, `todo!()`, `unimplemented!()`, `unreachable!()`, `dbg!()`, `println!()` in non-test Rust code.
+  - Zero Adobe assets, trademarks, or disassembly comments (`sub_*`, `0x...`).
+  - Never commit `source/`, `/var/tmp/`, secrets, passwords, LAN IPs, or compiled binaries (`*.exe`, `*.wasm`, `*.deb`).
+  - **Aegis hygiene:** Write numeric Rust literals >= 10,000 with underscores (`65_535.0`) and run `cargo run -p xtask -- aegis` before pushing to `origin`.
+- **Honest size claims (`T31` + `0090`):** Always record same-SHA before/after bytes for raw `.wasm`, `.gz`, `.br`, `.js`, `.html`, and startup vs lazy network transfer.
+- **2-Attempt Stop Rule:** If the same `Verify` command fails twice after one targeted fix, **STOP**, log exact error lines in `PROGRESS.md`, and escalate.
+- **Git safety:** Never run `git reset --hard`, `git clean -fd`, `git push --force`, `git stash drop`, `git stash pop`, or `git branch -D`.
+
+---
+
+## 3. Build Fleet & Standard Verification Commands
+
+| Host | Role | Directory & Target | Pulls From |
 |---|---|---|---|
-| **CS6 Studio UI from CraftAnything Experiment (`T29`) & Phosphor Icons** | `feat/experiment-merge` (`3f41fb5b`) added helper files without wiring them into `Shell::ui()`. Left 7 panels as 3-line stubs, `welcome_overlay.rs` dead, broken light-gray egui buttons, only 57 Phosphor SVGs wired in flyouts, and produced a ~5–10% ugly Windows `.exe`. | **CORE FIXED & WIRED.** Extracted clean-room `theme.rs`, `vector_icons.rs`, `chrome.rs`, `demo.rs`, `welcome_overlay.rs`, `panel_windows.rs` (4 stacked CS6 dock groups + 36 px Iconic Mode), and replaced all 7 stubs in `panels.rs`. `278/278` app tests + `184/184` xtask tests + `clippy -D warnings` + `wasm32` + all 6 `xtask` gates green. | **Phase A** (unify **Phosphor Icons** across the entire GUI, floating drag ghost, Playwright WASM proof, keyboard/a11y polish, Windows 11 human sign-off) |
-| **Binary Optimization (minification, name stripping, compression) & Modular Folder Split (`extensions/`, `examples/`, `libraries/`, lazy `modules/`) (`T31` + `0090`)** | Recorded in `docs/tasks/T31-modular-packaging-and-wasm-size.md` (`17438502`), then **completely dropped** from Hydrogen's handoff! Worse: Hydrogen deleted `<link data-trunk rel="rust" data-bin="firecraft-web" data-wasm-opt="z"/>` from `web/index.html` (`10187ec0`) and left `xtask/src/dist.rs` `.gz` matching broken (`&[".wasm", ".js", ".html"]` with leading dots — a 100% no-op!). | **BOTH REGRESSIONS FIXED** + regression unit tests added in `xtask/src/dist.rs`. Full measured size optimization + JS minification/mangling + Brotli/Gzip + retiring `egui_extras/svg` WASM bloat + splitting `examples/`, `libraries/`, `extensions/`, and lazy WASM `modules/` promoted to dedicated **Phase B**. | **Phase B** (`L-B1` through `L-B8`) |
-| **Native Taskbar / Dock Launcher & Open Recent / Pinned (`T30`)** | Recorded in `docs/tasks/T30-taskbar-launcher-menu.md` (`17438502`), then dropped from Hydrogen's handoff. | Restored and split cleanly into cross-platform MRU/Pinned (`L-A6`) + OS-native Jump List / Dock / `.desktop` adapters (`L-C6`) respecting `unsafe_code = "forbid"`. | **Phase A (`L-A6`) & Phase C (`L-C6`)** |
-| **Clean-Room & CI Integrity** | `crates/app/src/shell/constants.rs` carried forbidden binary/subroutine notes; `xtask/src/dist.rs` broke Windows MSVC (`PermissionsExt` ungated); `xtask/src/iconsurvey.rs` broke `the_survey_lists_every_shipped_icon`; `cargo fmt` failed on `diagnostic.rs`. | **ALL FIXED.** Clean-room comments scrubbed, `#[cfg(unix)]` gated in `dist.rs`, `iconsurvey.rs` prefix threaded, `cargo fmt --all` clean, `xtask aegis` green. | **Phase A (`L-A1`)** verify PR `#189` CI green |
-| **Marketing Site, Docs, Live Wiki, Packaging Matrix, 31 Issues / 3 PRs / Branches, Feedback & `v1.0.0` Launch** | Hydrogen partially touched `site/` and `diagnostic.rs`, left multi-page site, feedback dialog UI, wiki sync, packaging hardening, and issue closeout unfinished, and falsely claimed completion. | Honestly audited and re-sequenced into zero-ambiguity atomic tasks with strict visual/CLI verification gates. | **Phases A, C, D** |
+| **Local (`SWARMONE`)** | Edit files, `cargo fmt`, git commit/push, Playwright/site scripts, `xvfb-run` screenshots | `/nas/Temp/repos/FireCraft` (`integration/firecraft-1.0`) | Pushes `gitforge` first, then `origin` |
+| **`ssh fedora`** | Cargo tests, clippy, `wasm32`, `xtask` gates, Linux builds, WASM builds | `/nas/Temp/repos/FireCraft-git`<br/>`CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora` | `gitforge` (`origin` on fedora) |
+| **`ssh t5500`** | Windows `x86_64-pc-windows-gnu` `.exe` builds + Debian-glibc Linux builds for local `xvfb-run` | `/nas/Temp/repos/FireCraft-git`<br/>`CARGO_TARGET_DIR=/var/tmp/firecraft-target-t5500` | GitHub `origin` |
 
----
-
-## 2. How GPT-6-Luna Must Operate (Read First Every Session)
-
-### 2.1 The 7-Step Atomic Execution Loop
-Work on **at most 1 to 3 consecutive `[LUNA]` tasks** in the same phase per session. Never skip ahead. Never batch across a `[HUMAN GATE]`.
-
-1. **Read current state:** Open `docs/planning/luna/PROGRESS.md` and pick the **first unchecked `[ ]` task ID** (e.g., `L-A1`).
-2. **Open ONLY that phase's task pack:**
-   - Phase A -> [`PHASE-A-CI-UI-AND-POLISH.md`](PHASE-A-CI-UI-AND-POLISH.md)
-   - Phase B -> [`PHASE-B-OPTIMIZATION-AND-MODULAR-LAYOUT.md`](PHASE-B-OPTIMIZATION-AND-MODULAR-LAYOUT.md)
-   - Phase C -> [`PHASE-C-DOCS-SITE-AND-WIKI.md`](PHASE-C-DOCS-SITE-AND-WIKI.md)
-   - Phase D -> [`PHASE-D-PACKAGING-RELEASE-AND-CLOSEOUT.md`](PHASE-D-PACKAGING-RELEASE-AND-CLOSEOUT.md)
-3. **Run the task's `Pre-check` command verbatim.** If reality contradicts the assumption, **STOP** and record a blocker in `PROGRESS.md`.
-4. **Execute ONLY the steps in that task card.** Do not touch unrelated crates, refactor unrelated files, or invent unrequested features.
-5. **Prove runtime wiring + visual evidence (mandatory for UI / web / site tasks):**
-   - **Wiring check:** Verify via `grep` + unit/integration test that the live entrypoint (`Shell::ui()`, `main.rs`, `web/src/main.rs`, or `site/*.html`) actually invokes your new code. Never merge dead modules or text stubs.
-   - **Visual check:** Whenever editing `crates/app/src/shell/`, `web/`, or `site/`, capture a real PNG screenshot (via `xvfb-run` for desktop or Playwright for web/site) and **inspect the image directly** before claiming completion.
-6. **Run the task's `Verify` command verbatim** (using `ssh fedora` for Cargo/xtask gates; see §3). Exit code MUST be `0`.
-7. **Commit, push, and log receipt:**
-   - Format with `cargo fmt --all`.
-   - Commit with Conventional Commits (`<type>(<scope>): <subject>`, subject `<= 72` chars, `Co-Authored-By` trailer).
-   - Push **`gitforge` first**, then **`origin`** (once verified green).
-   - Update `docs/planning/luna/PROGRESS.md` (mark `[x]` + append dated receipt row with commit SHA, exact command, exit code `0`, and 1-line observed result) AND update `docs/TASKS.md` if a tracked task changed status.
-   - If the next task is a **`[HUMAN GATE]`**, **STOP IMMEDIATELY**, summarize the evidence bundle for the maintainer, and wait for explicit approval.
-
-### 2.2 Hard Stop Rules (Anti-Hydrogen Guardrails — NEVER Violate)
-1. **NO FALSE COMPLETION:** Never mark `[x]` without running the exact `Verify` command on the final commit and observing exit code `0`.
-2. **NO SELF-APPROVAL OF HUMAN GATES:** Never merge your own PR, close issues without evidence, publish a GitHub Release (`--draft=false`), push to production Cloudflare Pages, or delete branches/stashes without explicit maintainer sign-off.
-3. **NO SSH/RSYNC CODE SYNC:** Never copy source trees over `rsync` or `scp`. Always `git commit` -> `git push gitforge <branch>` (and `origin` when verified) -> `git pull --ff-only` on the remote build host (`fedora` or `t5500`).
-4. **NO HEAVY LOCAL CARGO BUILDS ON SWARMONE:** Local host enforces a build lease; offload Cargo tests, clippy, `xtask`, Linux release builds, and WASM builds to `ssh fedora`, and Windows MinGW review builds to `ssh t5500`.
-5. **CLEAN-ROOM & SAFETY INVARIANTS (`AGENTS.md`):**
-   - `unsafe_code = "forbid"` workspace-wide.
-   - Zero `unwrap()`, `expect()`, `panic!()`, `todo!()`, `unimplemented!()`, `unreachable!()`, `dbg!()`, `println!()` in non-test Rust code.
-   - Never copy Adobe code, binary assets, trademarks, or disassembly/subroutine addresses (`sub_*`, `0x...`).
-   - Never commit anything from `source/`, `/var/tmp/`, `.env`, tokens, passwords, raw LAN IPs, or binary build outputs (`*.exe`, `*.wasm`, `*.AppImage`, `*.deb`).
-   - **Aegis tip:** Aegis scans for US 5-digit ZIP codes in tracked text/code — write numeric literals >= 10,000 in Rust with underscores (e.g., `65_535.0`, `10_000`) and run `cargo run -p xtask -- aegis` before pushing to `origin`!
-6. **HONEST ENGINEERING ON OPTIMIZATION (`T31` + `0090`):**
-   - Always report same-SHA before/after bytes for **raw WASM**, **Gzip (`.gz`)**, **Brotli (`.br`)**, **JS glue**, **HTML**, and **initial vs deferred network transfer**.
-   - Rust variable names are NOT emitted as JS-style identifiers in release WASM; use `wasm-opt -Oz --strip-debug --strip-dwarf --strip-producers` + `strip` for Rust/WASM, and real JS minification/mangling (`esbuild`/`terser`) for generated JavaScript glue and site scripts.
-7. **2-ATTEMPT STOP RULE:** If the same `Verify` command fails twice after one targeted fix attempt, **STOP**, write the exact error log under **Blockers** in `PROGRESS.md`, and escalate to the maintainer.
-8. **GIT SAFETY:** Never run `git reset --hard`, `git clean -fd`, `git push --force`, `git stash drop`, `git stash pop`, or `git branch -D`.
-
----
-
-## 3. Build Fleet & Verification Cheat Sheet
-
-| Host / Path | Purpose | Repo Path & Target Dir | Git Upstream |
-|---|---|---|---|
-| **Local (`SWARMONE`)** | Editing, git commits/pushes, Playwright/site scripts, `xvfb-run` GUI screenshots | Worktree: `/var/tmp/firecraft-int-1.0` (`integration/firecraft-1.0`)<br/>Canonical: `/nas/Temp/repos/FireCraft` | Remotes: `gitforge` (push first), `origin` (GitHub) |
-| **`ssh fedora`** | All Cargo tests, `clippy -D warnings`, `wasm32-unknown-unknown`, `xtask` gates, `trunk` WASM builds, Linux release builds | Repo: `/var/tmp/firecraft-int-1.0-git`<br/>`CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora` | Pulls from `gitforge` (`origin` on fedora points to GitForge) |
-| **`ssh t5500`** | Windows `x86_64-pc-windows-gnu` review `.exe` builds (MinGW cross-toolchain installed) | Repo: `/var/tmp/firecraft-int-1.0-git`<br/>`CARGO_TARGET_DIR=/var/tmp/firecraft-target-t5500` | Pulls from GitHub `origin` (push to `origin` first!) |
-
-### Copy-Paste Standard Verification Recipes
-
-**1. Full Fedora verification gate (run after pushing to `gitforge`):**
+**Standard Fedora gate:**
 ```bash
-ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only origin integration/firecraft-1.0 && cargo test -p app && cargo test -p xtask && cargo clippy -p app -p xtask --all-targets -- -D warnings && cargo check --target wasm32-unknown-unknown -p firecraft-web && cargo run -p xtask -- layers && cargo run -p xtask -- toolchain && cargo run -p xtask -- panel-snapshot && cargo run -p xtask -- reachability && cargo run -p xtask -- icon-survey && cargo run -p xtask -- aegis'
+ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /nas/Temp/repos/FireCraft-git && git pull --ff-only origin integration/firecraft-1.0 && cargo test -p app && cargo test -p xtask && cargo clippy -p app -p xtask --all-targets -- -D warnings && cargo check --target wasm32-unknown-unknown -p firecraft-web && cargo run -p xtask -- layers && cargo run -p xtask -- toolchain && cargo run -p xtask -- panel-snapshot && cargo run -p xtask -- reachability && cargo run -p xtask -- icon-survey && cargo run -p xtask -- aegis'
 ```
 
-**2. Desktop GUI screenshot capture (after building `--release -p app` on `fedora` and copying binary to `/var/tmp/firecraft-linux-check/firecraft`):**
+**Standard `xvfb-run` GUI screenshot (using Debian-glibc binary built on `t5500` and copied to `/var/tmp/firecraft-linux-check/firecraft-t5500`):**
 ```bash
 xvfb-run -a -s "-screen 0 1440x900x24" bash -c '
-  LIBGL_ALWAYS_SOFTWARE=1 /var/tmp/firecraft-linux-check/firecraft --no-welcome &
+  LIBGL_ALWAYS_SOFTWARE=1 /var/tmp/firecraft-linux-check/firecraft-t5500 --no-welcome &
   PID=$!; sleep 4
   import -window root /var/tmp/firecraft-linux-check/shot-workspace.png
-  kill $PID 2>/dev/null || true
+  kill -9 $PID 2>/dev/null || true
 '
 ```
 
-**3. Windows review binary build on `t5500` (after pushing verified branch to `origin`):**
+**Standard Windows review binary build (after pushing to `origin`):**
 ```bash
-ssh t5500 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-t5500; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only origin integration/firecraft-1.0 && cargo build --release --target x86_64-pc-windows-gnu -p app'
+ssh t5500 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-t5500; cd /nas/Temp/repos/FireCraft-git && git pull --ff-only origin integration/firecraft-1.0 && cargo build --release --target x86_64-pc-windows-gnu -p app'
 scp t5500:/var/tmp/firecraft-target-t5500/x86_64-pc-windows-gnu/release/firecraft.exe /nas/Temp/repos/FireCraft/dist/windows-review/firecraft.exe
-sha256sum /nas/Temp/repos/FireCraft/dist/windows-review/firecraft.exe
+file /nas/Temp/repos/FireCraft/dist/windows-review/firecraft.exe && sha256sum /nas/Temp/repos/FireCraft/dist/windows-review/firecraft.exe
 ```
 
 ---
 
-## 4. Master Phase Roadmap
+## 4. 8-Phase Master Roadmap
 
 ```mermaid
 flowchart TD
-    DONE["Baseline Done (Neon 2026-11-26)<br/>CS6 Studio UI + Clean-Room + CI/WASM Fixes"] --> PA["Phase A: CI Green, UI Polish,<br/>WASM Proof, Feedback & Open Recent<br/>(L-A1 - L-A8)"]
-    PA --> PB["Phase B: Binary Optimization, Minification,<br/>Brotli/Gzip & Modular Folders<br/>(examples/, libraries/, extensions/, modules/)<br/>(L-B1 - L-B8)"]
-    PB --> PC["Phase C: Marketing Site, Docs,<br/>Live Wiki & OS Taskbar Launchers<br/>(L-C1 - L-C7)"]
-    PC --> PD["Phase D: Packaging Matrix, Issue/PR/Branch<br/>Closeout, Staging, Testers & v1.0.0 Launch<br/>(L-D1 - L-D10)"]
+    B["Baseline Complete (Neon 2026-11-26)<br/>CS6 Studio UI + Clean-Room + CI & WASM Fixes"] --> P1["Phase 1: PR #189 CI, Visual Bugs & WASM Smoke<br/>(L1.1 - L1.5)"]
+    P1 --> P2["Phase 2: Full Phosphor Icons Unification<br/>(L2.1 - L2.6)"]
+    P2 --> P3["Phase 3: Core UX Features & Windows Review<br/>(L3.1 - L3.8)"]
+    P3 --> P4["Phase 4: Binary/WASM Optimization, Minification & Brotli/Gzip<br/>(L4.1 - L4.8)"]
+    P4 --> P5["Phase 5: Modular Folders (examples/, libraries/, extensions/, modules/)<br/>(L5.1 - L5.8)"]
+    P5 --> P6["Phase 6: Site, Docs, Live Wiki & OS Taskbar Launchers<br/>(L6.1 - L6.10)"]
+    P6 --> P7["Phase 7: Packaging Matrix & 31 Issues / PRs / Branch Closeout<br/>(L7.1 - L7.11)"]
+    P7 --> P8["Phase 8: Staging, Testers & Human-Approved v1.0.0 Launch<br/>(L8.1 - L8.7)"]
 ```
 
-| Phase | Goal | Task IDs | Task Pack | Human Gates |
+| Phase | Pack File | Scope | Tasks | Human Gates |
 |---|---|---|---|---|
-| **Phase A** | Land PR `#189` CI green, Playwright WASM proof, floating drag ghost, In-App Feedback dialog, Command Palette upgrade, `Open Recent`/Pinned, Windows 11 review | `L-A1`–`L-A8` | [`PHASE-A-CI-UI-AND-POLISH.md`](PHASE-A-CI-UI-AND-POLISH.md) | `L-A1` (merge PR `#189`), `L-A8` (Phase A sign-off) |
-| **Phase B** | Twiggy size baseline, `wasm-opt -Oz` stripping, `egui_extras/svg` WASM diet, JS minification/mangling, Brotli `.br` + Gzip `.gz`, modular folders (`examples/`, `libraries/`, `extensions/`, lazy WASM `modules/`) | `L-B1`–`L-B8` | [`PHASE-B-OPTIMIZATION-AND-MODULAR-LAYOUT.md`](PHASE-B-OPTIMIZATION-AND-MODULAR-LAYOUT.md) | `L-B8` (size report & modular layout review) |
-| **Phase C** | Multi-page `site/` + preview deploy, README/docs reconciliation, live GitHub Wiki sync, contributor templates, OS-native Taskbar/Dock launchers (`T30.3`–`T30.5`) | `L-C1`–`L-C7` | [`PHASE-C-DOCS-SITE-AND-WIKI.md`](PHASE-C-DOCS-SITE-AND-WIKI.md) | `L-C3` (site prod deploy), `L-C5` (wiki push) |
-| **Phase D** | Scope decision (`0130`), full cross-platform packaging (Linux DEB/tar/AppImage/Flatpak, Windows ZIP/Inno, macOS DMG, Web ZIP, Source, SBOM), 31 issues / PRs / branches closeout, staging + external testers, `v1.0.0` launch | `L-D1`–`L-D10` | [`PHASE-D-PACKAGING-RELEASE-AND-CLOSEOUT.md`](PHASE-D-PACKAGING-RELEASE-AND-CLOSEOUT.md) | `L-D1`, `L-D6`, `L-D8`, `L-D10` |
+| **1** | [`PHASE-1-CI-AND-VISUAL-POLISH.md`](PHASE-1-CI-AND-VISUAL-POLISH.md) | PR `#189` CI green + merge, fix 3 visually-caught UI glitches, Playwright WASM smoke | `L1.1`–`L1.5` | `L1.1` (merge PR `#189`) |
+| **2** | [`PHASE-2-PHOSPHOR-ICONS.md`](PHASE-2-PHOSPHOR-ICONS.md) | Audit & vendor missing MIT Phosphor icons, unify Tools/Toolbar/Tabs/Footer/Panels/Align/Path, Dark/Light/HiDPI proof | `L2.1`–`L2.6` | `L2.6` (icon visual sign-off) |
+| **3** | [`PHASE-3-CORE-UX-FEATURES.md`](PHASE-3-CORE-UX-FEATURES.md) | Drag ghost & edge snap (`P2.6`), Feedback modal (`P8.2`), Command Palette discovery, `Open Recent`/Pinned + CLI (`T30.1–T30.2`), Windows review `.exe` | `L3.1`–`L3.8` | `L3.8` (Windows 11 review) |
+| **4** | [`PHASE-4-BINARY-AND-WASM-OPT.md`](PHASE-4-BINARY-AND-WASM-OPT.md) | `twiggy` baseline, web profile + `wasm-opt -Oz --strip-*`, build-time Phosphor atlas/font (drops runtime `resvg`), font audit, JS minification/mangling, Brotli `.br` + Gzip `.gz` | `L4.1`–`L4.8` | `L4.8` (size report sign-off) |
+| **5** | [`PHASE-5-MODULAR-FOLDERS-AND-EXTENSIONS.md`](PHASE-5-MODULAR-FOLDERS-AND-EXTENSIONS.md) | Split `examples/`, `libraries/`, desktop+WASM lazy loader, `extensions/` contract + 2 real extensions (`T31.4`), lazy WASM `modules/` (`T31.3`), archive layout check | `L5.1`–`L5.8` | `L5.8` (modular layout sign-off) |
+| **6** | [`PHASE-6-SITE-DOCS-WIKI-AND-LAUNCHERS.md`](PHASE-6-SITE-DOCS-WIKI-AND-LAUNCHERS.md) | Multi-page `site/`, `app.js` + preview deploy, `README.md`/core docs, `docs/wiki/` + templates + wiki sync, Linux `.desktop` / Windows Jump List / macOS Dock (`T30.3–T30.5`) | `L6.1`–`L6.10` | `L6.4`, `L6.7` |
+| **7** | [`PHASE-7-PACKAGING-AND-REPO-CLOSEOUT.md`](PHASE-7-PACKAGING-AND-REPO-CLOSEOUT.md) | Scope decision `0130`, naming/validators, Linux DEB/tar/AppImage/Flatpak/RPM, Windows ZIP/Inno, macOS DMG, Web ZIP/Source/SBOM, rehearsal, 31 issues + PRs `#186`–`#188` + branches | `L7.1`–`L7.11` | `L7.1`, `L7.11` |
+| **8** | [`PHASE-8-STAGING-TESTERS-AND-V1-LAUNCH.md`](PHASE-8-STAGING-TESTERS-AND-V1-LAUNCH.md) | Isolated staging + hash check, tester cohort + P0/P1 fixes, rollback rehearsal, `v1.0.0` Go/No-Go, freeze/tag/re-hash, publish + promote Pages + launch report | `L8.1`–`L8.7` | `L8.4`, `L8.6`, `L8.7` |
 
 ---
 
-## 5. Copy-Paste Starter Prompt for GPT-6-Luna Sessions
+## 5. Audit Summary — What Was Fixed Before Handover
 
-Use this exact prompt when starting any fresh GPT-6-Luna session:
+- **CS6 Studio UI (`T29`):** Neon replaced Hydrogen's unwired shell and 7 stubs with clean-room `theme.rs`, `vector_icons.rs`, `chrome.rs`, `demo.rs`, `welcome_overlay.rs`, `panel_windows.rs`, and real `panels.rs`; verified visually with live `xvfb-run` captures (`docs/img/app-main.png`, `docs/img/app-welcome.png`, `site/assets/app-main.png`) and a fresh Windows GUI binary (`dist/windows-review/firecraft.exe`).
+- **Binary/WASM Optimization Regressions (`T31` + `0090`):** Restored `<link data-trunk rel="rust" data-bin="firecraft-web" data-wasm-opt="z"/>` in `web/index.html` (dropped by Hydrogen in `10187ec0`) and fixed the leading-dot bug in `xtask/src/dist.rs::is_compressible_web_asset` (previously a no-op), with regression unit tests. Full optimization & modular folder splitting (`examples/`, `libraries/`, `extensions/`, `modules/`) are now dedicated Phases 4 & 5.
+- **Phosphor Icons:** 57 MIT Phosphor SVGs exist in `assets/icons-phosphor/` (`icons.rs`), currently used in flyouts while newer chrome uses programmatic `vector_icons.rs`. Phase 2 unifies the entire GUI on crisp Phosphor Icons; Phase 4 moves Phosphor rasterization to build time so WASM drops `resvg`/`usvg`/`fontdb` without losing Phosphor Icons!
+- **Clean-Room & CI:** Scrubbed `constants.rs`, gated `PermissionsExt` in `dist.rs` for Windows MSVC, fixed `iconsurvey.rs` prefix bug; `app` (278 tests), `xtask` (184 tests), `clippy -D warnings`, `wasm32`, `layers`, `toolchain`, `panel-snapshot`, `reachability` (257/257), `icon-survey`, and `aegis` are all green.
+
+---
+
+## 6. Copy-Paste Starter Prompt for GPT-6-Luna
 
 ```text
-Read these 3 files in order before doing anything:
-1. /var/tmp/firecraft-int-1.0/AGENTS.md
-2. /var/tmp/firecraft-int-1.0/docs/planning/luna/README.md
-3. /var/tmp/firecraft-int-1.0/docs/planning/luna/PROGRESS.md
+Read these 3 files in order before touching any code:
+1. /nas/Temp/repos/FireCraft/AGENTS.md
+2. /nas/Temp/repos/FireCraft/docs/planning/luna/README.md
+3. /nas/Temp/repos/FireCraft/docs/planning/luna/PROGRESS.md
 
-Find the FIRST unchecked [ ] task ID in docs/planning/luna/PROGRESS.md and open ONLY its matching PHASE-*.md task pack under docs/planning/luna/.
-Execute strictly 1 to 3 consecutive [LUNA] tasks in that phase (stop immediately before any [HUMAN GATE]).
-Obey every rule in README.md §2:
-- Run each task's Pre-check and Verify commands verbatim (use ssh fedora for Cargo/xtask builds; never run heavy builds locally or rsync code).
-- For any UI, web, or site task, prove live wiring and capture + inspect a real PNG screenshot before marking done.
-- Run cargo fmt --all and xtask aegis before pushing; push gitforge first, then origin.
-- Update docs/planning/luna/PROGRESS.md with dated receipts (commit SHA, command, exit 0, 1-line result) and keep docs/TASKS.md reconciled.
-- Stop and report clearly if a verify check fails twice or you reach a [HUMAN GATE].
+Find the FIRST unchecked [ ] task ID in docs/planning/luna/PROGRESS.md and open ONLY its matching PHASE-*.md file.
+Execute strictly 1 to 3 consecutive [LUNA] tasks in that phase, stopping immediately before any [HUMAN GATE].
+For every task:
+- Run Pre-check verbatim before editing.
+- Edit ONLY the files scoped by the card.
+- Run cargo fmt --all, push gitforge first, run Verify verbatim on ssh fedora (exit 0 required), then push origin.
+- For UI, icon, web, or site changes, capture and visually inspect real PNG screenshots before marking done.
+- Update docs/planning/luna/PROGRESS.md with dated receipts (commit SHA, command, exit 0, observed result) and keep docs/TASKS.md reconciled.
+- Stop and log a blocker if Verify fails twice or you hit a [HUMAN GATE].
 ```
