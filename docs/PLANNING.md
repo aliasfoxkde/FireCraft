@@ -582,3 +582,12 @@ parley, boa build for wasm32; Graphite read at commit `7477cd2`
 (2026-10-10): editor/GUI separation, dispatcher message bus, delta-undo RFC,
 flat registry document model, content-addressed resources, CPU filter
 kernels — patterns adopted in §7.
+
+
+---
+
+## FireCraft 1.0 launch and product expansion references
+
+The cross-workstream 1.0 execution proposal is [FIRECRAFT-1.0-CONSOLIDATION-AND-RELEASE-HANDOFF.md](planning/FIRECRAFT-1.0-CONSOLIDATION-AND-RELEASE-HANDOFF.md). The staged feature horizons and cross-cutting quality requirements are in [FIRECRAFT-PRODUCT-ROADMAP-AND-EXPANSION.md](planning/FIRECRAFT-PRODUCT-ROADMAP-AND-EXPANSION.md). The existing [MARKETING-SITE-ROADMAP.md](MARKETING-SITE-ROADMAP.md) defines the public landing page and Cloudflare Pages deployment.
+
+These are companion planning documents, not replacements for this architecture/format plan or the live task ledger. Update technical decisions here when implementation evidence changes architecture; use `TASKS.md` and approved tickets to authorize work.
