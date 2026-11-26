@@ -749,6 +749,15 @@ fn patch_wasm_cdn(out: &std::path::Path) -> Result<(), String> {
     Ok(())
 }
 
+/// Returns true when a staged web asset should receive a pre-compressed `.gz`
+/// sidecar. `Path::extension` returns the bare extension without a leading dot.
+fn is_compressible_web_asset(path: &Path) -> bool {
+    matches!(
+        path.extension().and_then(|e| e.to_str()),
+        Some("wasm" | "js" | "html")
+    )
+}
+
 /// Builds the release bundle with trunk and stages a fresh copy under
 /// `dist/web/` — the staging directory starts empty every run, so a
 /// dist artifact can never carry leftovers from an older tree.
@@ -797,13 +806,12 @@ fn stage_web() -> Result<Vec<PathBuf>, String> {
     // assets. Sidecars reduce transfer bytes only when the host serves them
     // with Content-Encoding; they do not change the raw WASM size or any
     // upload/per-object limit. Keep the raw module budget separate.
-    let compressible = &[".wasm", ".js", ".html"];
     let mut to_add = Vec::new();
     for path in &staged {
-        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-        if !compressible.contains(&ext) {
+        if !is_compressible_web_asset(path) {
             continue;
         }
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
         let gz = path.with_extension(format!("{ext}.gz"));
         let mut encoder = flate2::write::GzEncoder::new(
             std::fs::File::create(&gz).map_err(|e| format!("create {}: {e}", gz.display()))?,
@@ -3095,6 +3103,35 @@ mod manifest_tests {
         assert!(
             err.contains("unknown schema"),
             "a manifest that is not an object must fail the verification: {err}"
+        );
+    }
+
+    #[test]
+    fn compressible_web_assets_match_without_leading_dots() {
+        assert!(is_compressible_web_asset(Path::new(
+            "dist/web/firecraft-web_bg.wasm"
+        )));
+        assert!(is_compressible_web_asset(Path::new(
+            "dist/web/firecraft-web.js"
+        )));
+        assert!(is_compressible_web_asset(Path::new("dist/web/index.html")));
+        assert!(!is_compressible_web_asset(Path::new(
+            "dist/web/favicon.png"
+        )));
+        assert!(!is_compressible_web_asset(Path::new(
+            "dist/web/firecraft-web_bg.wasm.gz"
+        )));
+    }
+
+    #[test]
+    fn web_index_declares_trunk_rust_wasm_opt_z() {
+        let index = std::fs::read_to_string(workspace_root().join("web/index.html"))
+            .expect("read web/index.html");
+        assert!(
+            index.contains("data-trunk")
+                && index.contains("rel=\"rust\"")
+                && index.contains("data-wasm-opt=\"z\""),
+            "web/index.html must declare the Trunk rust asset with data-wasm-opt=\"z\""
         );
     }
 }
