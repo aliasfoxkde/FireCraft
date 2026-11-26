@@ -122,15 +122,18 @@ fn render() -> Result<String, String> {
     if lucide_dir.exists() {
         files.extend(all_files(&lucide_dir)?);
     }
-    let mut license_text = String::new();
     let phosphor_license = std::fs::read_to_string(root.join(PHOSPHOR_LICENSE))
         .map_err(|e| format!("read {PHOSPHOR_LICENSE}: {e}"))?;
-    let mut feather = Vec::new();
-    if Path::new(&root.join(LUCIDE_LICENSE)).exists() {
-        license_text = std::fs::read_to_string(root.join(LUCIDE_LICENSE))
-            .map_err(|e| format!("read {LUCIDE_LICENSE}: {e}"))?;
-        feather = feather_derived(&license_text);
+    if phosphor_license.trim().is_empty() {
+        return Err(format!("{PHOSPHOR_LICENSE} is empty"));
     }
+    let feather = if root.join(LUCIDE_LICENSE).exists() {
+        let license_text = std::fs::read_to_string(root.join(LUCIDE_LICENSE))
+            .map_err(|e| format!("read {LUCIDE_LICENSE}: {e}"))?;
+        feather_derived(&license_text)
+    } else {
+        Vec::new()
+    };
     let rows = ledger_rows(
         &std::fs::read_to_string(root.join(ATTRIBUTION))
             .map_err(|e| format!("read {ATTRIBUTION}: {e}"))?,
@@ -143,10 +146,17 @@ fn render() -> Result<String, String> {
     for (rel, bytes) in &files {
         if rel.ends_with(".svg") {
             let in_phosphor = rel.contains("icons-phosphor");
-            icons.push(icon_for(&root, rel, *bytes, &feather, &rows, &table, in_phosphor)?);
+            icons.push(icon_for(
+                &root,
+                rel,
+                *bytes,
+                &feather,
+                &rows,
+                &table,
+                in_phosphor,
+            )?);
         } else {
-            let in_phosphor = rel.contains("phosphor");
-            others.push(other_for(rel, *bytes, &rows, in_phosphor)?);
+            others.push(other_for(rel, *bytes, &rows)?);
         }
     }
     icons.sort_by(|a, b| a.path.cmp(&b.path));
@@ -184,13 +194,12 @@ fn render() -> Result<String, String> {
         grouped(svg_bytes)
     ));
     out.push_str(&format!(
-        "- Other files under `{ICON_DIR}/`: **{}** ({} B) — the licence file\n  \
-         and the application icon PNG\n",
+        "- Other non-SVG icon files: **{}** ({} B) — licence and application icon\n",
         others.len(),
         grouped(other_bytes)
     ));
     out.push_str(&format!(
-        "- Total under `{ICON_DIR}/`: **{} B**\n",
+        "- Total shipped icon assets: **{} B**\n",
         grouped(total_bytes)
     ));
     out.push_str(&format!(
@@ -346,11 +355,10 @@ fn icon_for(
         embedded: table.contains(&format!("assets/icons-phosphor/{stem}.svg"))
             || table.contains(&format!("assets/icons/{stem}.svg")),
     })
-}}
-   }
+}
 /// Describes one shipped file that is not an SVG icon.
-fn other_for(rel: &str, bytes: u64, rows: &[Row], is_phosphor_license: bool) -> Result<Other, String> {
-    let (what, attribution) = if is_phosphor_license {
+fn other_for(rel: &str, bytes: u64, rows: &[Row]) -> Result<Other, String> {
+    let (what, attribution) = if rel == PHOSPHOR_LICENSE {
         (
             "The Phosphor licence (MIT) for the tool/UI icons above".to_owned(),
             rows.iter()
@@ -360,7 +368,8 @@ fn other_for(rel: &str, bytes: u64, rows: &[Row], is_phosphor_license: bool) -> 
         )
     } else if rel == LUCIDE_LICENSE {
         (
-            "The Lucide licence (ISC) and the Feather licence (MIT) for the deprecated icons above".to_owned(),
+            "The Lucide licence (ISC) and the Feather licence (MIT) for the deprecated icons above"
+                .to_owned(),
             rows.iter()
                 .filter(|row| row.licence.contains("LICENSE-lucide.txt"))
                 .map(|row| citation(row, LUCIDE_LICENSE))
@@ -378,31 +387,36 @@ fn other_for(rel: &str, bytes: u64, rows: &[Row], is_phosphor_license: bool) -> 
              row is a licence defect, not a documentation gap"
         ));
     }
-    Ok(Other {{
+    Ok(Other {
         path: rel.to_owned(),
         bytes,
         what,
         attribution,
     })
-}}
-
+}
 
 /// Every file under the icon directory, as (relative path, bytes).
 fn all_files(dir: &Path) -> Result<Vec<(String, u64)>, String> {
+    let workspace = workspace_root();
+    let prefix = dir
+        .strip_prefix(&workspace)
+        .map_err(|e| format!("{} is outside {}: {e}", dir.display(), workspace.display()))?
+        .to_string_lossy()
+        .replace('\\', "/");
     let mut out = Vec::new();
-    walk(dir, dir, &mut out)?;
+    walk(dir, dir, &prefix, &mut out)?;
     out.sort();
     Ok(out)
 }
 
 /// Walks one directory, collecting the files under it.
-fn walk(root: &Path, dir: &Path, out: &mut Vec<(String, u64)>) -> Result<(), String> {
+fn walk(root: &Path, dir: &Path, prefix: &str, out: &mut Vec<(String, u64)>) -> Result<(), String> {
     let entries = std::fs::read_dir(dir).map_err(|e| format!("read {}: {e}", dir.display()))?;
     for entry in entries {
         let entry = entry.map_err(|e| format!("read {}: {e}", dir.display()))?;
         let path = entry.path();
         if path.is_dir() {
-            walk(root, &path, out)?;
+            walk(root, &path, prefix, out)?;
             continue;
         }
         let bytes = entry
@@ -414,7 +428,7 @@ fn walk(root: &Path, dir: &Path, out: &mut Vec<(String, u64)>) -> Result<(), Str
             .map_err(|e| format!("{} is not under {}: {e}", path.display(), root.display()))?
             .to_string_lossy()
             .replace('\\', "/");
-        out.push((format!("{ICON_DIR}/{rel}"), bytes));
+        out.push((format!("{prefix}/{rel}"), bytes));
     }
     Ok(())
 }
@@ -467,7 +481,7 @@ fn covering_rows(rows: &[Row], path: &str, set_covered: bool) -> Vec<String> {
         }
     }
     out
-}}
+}
 
 /// The Lucide icons that Lucide itself derives from Feather — those
 /// ship under the MIT terms the licence file carries.
@@ -615,20 +629,21 @@ mod tests {
         assert!(feather_derived("ISC License\n").is_empty());
     }
 
-    /// The shipped licence file's Feather list is the real one: the
-    /// parser must not run past the end of the list into the MIT text.
-    ///
-    /// NOTE: Lucide license was removed when migrating to Phosphor icons.
-    /// The Lucide Feather list test is skipped.
+    /// The migrated survey uses repository-relative Phosphor paths and
+    /// includes the corresponding licence file as a shipped asset.
     #[test]
-    #[ignore]
-    fn the_shipped_licence_file_yields_only_icon_names() {
+    fn phosphor_assets_keep_their_paths_and_license_attribution() {
+        let text = render().unwrap_or_else(|e| panic!("the survey renders: {e}"));
         let root = workspace_root();
-        let license = std::fs::read_to_string(root.join(LUCIDE_LICENSE)).unwrap();
-        let names = feather_derived(&license);
-        assert!(names.len() > 50, "the Feather list is long: {names:?}");
-        assert!(names.contains(&"zoom-in".to_owned()));
-        assert!(!names.iter().any(|name| name.contains("License")));
+        let phosphor_files = all_files(&root.join(PHOSPHOR_DIR)).unwrap();
+        let first_icon = phosphor_files
+            .iter()
+            .find(|(path, _)| path.ends_with(".svg"))
+            .expect("the Phosphor icon set is present");
+        assert!(text.contains(&first_icon.0));
+        assert!(!text.contains("assets/icons/brush.svg"));
+        assert!(text.contains(PHOSPHOR_LICENSE));
+        assert!(text.contains("MIT (Phosphor Icons)"));
     }
 
     /// The survey lists every shipped icon, and the byte totals are

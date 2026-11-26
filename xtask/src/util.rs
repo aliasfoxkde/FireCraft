@@ -153,22 +153,6 @@ pub fn has_binary(name: &str) -> bool {
         .map_or(false, |s| s.success())
 }
 
-/// Runs `cargo` and returns stdout+stderr, failing only on spawn error.
-pub fn cargo_raw(args: &[&str]) -> Result<String, String> {
-    let output = spawn(None, "cargo", args)?;
-    let out = String::from_utf8_lossy(&output.stdout).into_owned();
-    let err = String::from_utf8_lossy(&output.stderr).into_owned();
-    if !output.status.success() {
-        return Err(format!(
-            "`cargo {}` exited {}:\n{}",
-            args.join(" "),
-            output.status,
-            output_tail(&output)
-        ));
-    }
-    Ok(format!("{}{}", out, err))
-}
-
 /// Runs a program and captures stdout+stderr as a single string.
 pub fn run_and_capture(program: &str, args: &[&str]) -> Result<String, String> {
     let (stdout, stderr) = capture_in(None, program, args)?;

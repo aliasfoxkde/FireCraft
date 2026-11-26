@@ -58,6 +58,15 @@ temp/
 # with every session, so their findings can never stick to the baseline.
 .scratch/
 
+# Local phase-0 audit snapshots. These are git-ignored operator artifacts,
+# not repository content; redact identifiers before sharing them outside
+# the workspace.
+plan/
+
+# Per-task worktrees are separate repository checkouts, not source owned by
+# this checkout. Their policy is enforced when each worktree is scanned.
+.worktrees/
+
 # Proprietary Adobe reference install (git-ignored working material,
 # see CLAUDE.md source/ rules). Third-party binaries and vendor JS —
 # every finding there is noise by definition, and the files churn.

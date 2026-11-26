@@ -7,96 +7,79 @@ and whether the runtime table embeds it in the binary.
 
 ## Summary
 
-- Shipped SVG icons: **73** (29,004 B)
-- Other files under `assets/icons/`: **2** (18,208 B) — the licence file
-  and the application icon PNG
-- Total under `assets/icons/`: **47,212 B**
-- Icons embedded in the binary by `crates/app/src/shell/icons.rs`: **73** of 73
+- Shipped SVG icons: **57** (29,345 B)
+- Other non-SVG icon files: **2** (15,646 B) — licence and application icon
+- Total shipped icon assets: **44,991 B**
+- Icons embedded in the binary by `crates/app/src/shell/icons.rs`: **57** of 57
 
 ## The icon set
 
 | Icon file | Bytes | Upstream | Licence | Licence file | Attribution row | Embedded |
 |---|---:|---|---|---|---|---|
-| `assets/icons/aperture.svg` | 440 | Lucide (Feather-derived) — icon `aperture` | MIT (Feather, via Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/arrow-left-right.svg` | 313 | Lucide — icon `arrow-left-right` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/blend.svg` | 276 | Lucide — icon `blend` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/brush.svg` | 398 | Lucide — icon `brush` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/circle-dashed.svg` | 590 | Lucide — icon `circle-dashed` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/circle-dot.svg` | 279 | Lucide — icon `circle-dot` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/circle.svg` | 244 | Lucide (Feather-derived) — icon `circle` | MIT (Feather, via Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/contrast.svg` | 285 | Lucide — icon `contrast` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/copy.svg` | 339 | Lucide — icon `copy` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/crop.svg` | 288 | Lucide — icon `crop` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/crosshair.svg` | 412 | Lucide (Feather-derived) — icon `crosshair` | MIT (Feather, via Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/droplet.svg` | 325 | Lucide — icon `droplet` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/eraser.svg` | 383 | Lucide — icon `eraser` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/eye-off.svg` | 504 | Lucide — icon `eye-off` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/eye.svg` | 360 | Lucide — icon `eye` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/feather.svg` | 367 | Lucide (Feather-derived) — icon `feather` | MIT (Feather, via Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/flame.svg` | 314 | Lucide — icon `flame` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/git-commit-horizontal.svg` | 327 | Lucide — icon `git-commit-horizontal` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/grid-3x3.svg` | 355 | Lucide — icon `grid-3x3` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/hand.svg` | 483 | Lucide — icon `hand` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/hexagon.svg` | 345 | Lucide — icon `hexagon` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/image.svg` | 358 | Lucide — icon `image` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/lasso-select.svg` | 597 | Lucide — icon `lasso-select` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/lasso.svg` | 333 | Lucide — icon `lasso` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/layers.svg` | 510 | Lucide — icon `layers` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/lock-open.svg` | 308 | Lucide — icon `lock-open` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/lock.svg` | 309 | Lucide (Feather-derived) — icon `lock` | MIT (Feather, via Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/magnet.svg` | 489 | Lucide — icon `magnet` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/minus.svg` | 232 | Lucide (Feather-derived) — icon `minus` | MIT (Feather, via Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/monitor.svg` | 346 | Lucide (Feather-derived) — icon `monitor` | MIT (Feather, via Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/mouse-pointer-2.svg` | 356 | Lucide — icon `mouse-pointer-2` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/move.svg` | 371 | Lucide (Feather-derived) — icon `move` | MIT (Feather, via Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/orbit.svg` | 418 | Lucide — icon `orbit` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/paint-bucket.svg` | 622 | Lucide — icon `paint-bucket` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/paintbrush.svg` | 623 | Lucide — icon `paintbrush` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/palette.svg` | 571 | Lucide — icon `palette` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/pen-tool.svg` | 590 | Lucide — icon `pen-tool` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/pencil.svg` | 377 | Lucide — icon `pencil` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/pentagon.svg` | 362 | Lucide — icon `pentagon` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/pipette.svg` | 461 | Lucide — icon `pipette` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/pizza.svg` | 506 | Lucide — icon `pizza` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/plus.svg` | 256 | Lucide (Feather-derived) — icon `plus` | MIT (Feather, via Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/pointer.svg` | 521 | Lucide — icon `pointer` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/rectangle-horizontal.svg` | 261 | Lucide — icon `rectangle-horizontal` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/rectangle-vertical.svg` | 261 | Lucide — icon `rectangle-vertical` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/redo-2.svg` | 308 | Lucide — icon `redo-2` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/refresh-cw.svg` | 392 | Lucide — icon `refresh-cw` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/replace.svg` | 468 | Lucide — icon `replace` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/route.svg` | 344 | Lucide — icon `route` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/ruler.svg` | 461 | Lucide — icon `ruler` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/scale.svg` | 395 | Lucide — icon `scale` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/scan-search.svg` | 431 | Lucide — icon `scan-search` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/scan.svg` | 366 | Lucide — icon `scan` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/scissors.svg` | 371 | Lucide — icon `scissors` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/search.svg` | 275 | Lucide (Feather-derived) — icon `search` | MIT (Feather, via Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/shield.svg` | 386 | Lucide — icon `shield` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/slice-knife.svg` | 429 | FireCraft (original drawing) | Apache-2.0 | `LICENSE` | L28 (`assets/icons/slice-knife.svg`) | yes |
-| `assets/icons/sparkles.svg` | 567 | Lucide — icon `sparkles` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/spline.svg` | 314 | Lucide — icon `spline` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/square-dashed-mouse-pointer.svg` | 593 | Lucide — icon `square-dashed-mouse-pointer` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/square-dashed.svg` | 532 | Lucide — icon `square-dashed` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/square.svg` | 261 | Lucide (Feather-derived) — icon `square` | MIT (Feather, via Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/stamp.svg` | 410 | Lucide — icon `stamp` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/sun-dim.svg` | 477 | Lucide — icon `sun-dim` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/sun.svg` | 485 | Lucide — icon `sun` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/trash.svg` | 389 | Lucide (Feather-derived) — icon `trash` | MIT (Feather, via Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/triangle.svg` | 291 | Lucide (Feather-derived) — icon `triangle` | MIT (Feather, via Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/type.svg` | 310 | Lucide (Feather-derived) — icon `type` | MIT (Feather, via Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/undo-2.svg` | 309 | Lucide — icon `undo-2` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/wand-sparkles.svg` | 529 | Lucide — icon `wand-sparkles` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/waypoints.svg` | 453 | Lucide — icon `waypoints` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/wrench.svg` | 417 | Lucide — icon `wrench` | ISC (Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
-| `assets/icons/zoom-in.svg` | 376 | Lucide (Feather-derived) — icon `zoom-in` | MIT (Feather, via Lucide) | `assets/icons/LICENSE-lucide.txt` | L25 (`assets/icons/*.svg`) | yes |
+| `assets/icons-phosphor/auto-shape.svg` | 905 | Phosphor — icon `auto-shape` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/autoshapecircle.svg` | 905 | Phosphor — icon `autoshapecircle` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/autoshapethex.svg` | 341 | Phosphor — icon `autoshapethex` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/blur-2.svg` | 919 | Phosphor — icon `blur-2` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/blur.svg` | 919 | Phosphor — icon `blur` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/brush.svg` | 604 | Phosphor — icon `brush` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/burn-2.svg` | 536 | Phosphor — icon `burn-2` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/burn.svg` | 536 | Phosphor — icon `burn` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/crop.svg` | 275 | Phosphor — icon `crop` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/default-stroke-fill.svg` | 124 | Phosphor — icon `default-stroke-fill` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/distort.svg` | 357 | Phosphor — icon `distort` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/dodge-2.svg` | 763 | Phosphor — icon `dodge-2` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/dodge.svg` | 763 | Phosphor — icon `dodge` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/ellipse.svg` | 183 | Phosphor — icon `ellipse` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/eraser.svg` | 421 | Phosphor — icon `eraser` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/eyedropper.svg` | 811 | Phosphor — icon `eyedropper` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/fill.svg` | 688 | Phosphor — icon `fill` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/fit-in-window.svg` | 297 | Phosphor — icon `fit-in-window` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/fit.svg` | 297 | Phosphor — icon `fit` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/gradient.svg` | 563 | Phosphor — icon `gradient` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/hand.svg` | 605 | Phosphor — icon `hand` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/hotspot.svg` | 919 | Phosphor — icon `hotspot` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/knife-2.svg` | 674 | Phosphor — icon `knife-2` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/knife.svg` | 674 | Phosphor — icon `knife` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/lasso.svg` | 919 | Phosphor — icon `lasso` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/line.svg` | 124 | Phosphor — icon `line` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/marquee.svg` | 193 | Phosphor — icon `marquee` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/no-stroke-fill.svg` | 124 | Phosphor — icon `no-stroke-fill` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/paint-bucket.svg` | 688 | Phosphor — icon `paint-bucket` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/pen-2.svg` | 511 | Phosphor — icon `pen-2` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/pen.svg` | 511 | Phosphor — icon `pen` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/pencil-2.svg` | 370 | Phosphor — icon `pencil-2` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/pencil.svg` | 370 | Phosphor — icon `pencil` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/picker.svg` | 811 | Phosphor — icon `picker` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/pointer.svg` | 327 | Phosphor — icon `pointer` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/polygon.svg` | 341 | Phosphor — icon `polygon` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/rect.svg` | 193 | Phosphor — icon `rect` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/red-eye-remove.svg` | 811 | Phosphor — icon `red-eye-remove` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/red-eye.svg` | 811 | Phosphor — icon `red-eye` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/redraw-path.svg` | 388 | Phosphor — icon `redraw-path` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/replace-color-2.svg` | 547 | Phosphor — icon `replace-color-2` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/replace-color.svg` | 547 | Phosphor — icon `replace-color` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/rubber-stamp.svg` | 398 | Phosphor — icon `rubber-stamp` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/scale.svg` | 357 | Phosphor — icon `scale` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/select.svg` | 327 | Phosphor — icon `select` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/sharpen.svg` | 627 | Phosphor — icon `sharpen` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/skew.svg` | 357 | Phosphor — icon `skew` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/slice.svg` | 674 | Phosphor — icon `slice` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/smudge.svg` | 604 | Phosphor — icon `smudge` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/stamp.svg` | 398 | Phosphor — icon `stamp` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/subselect.svg` | 369 | Phosphor — icon `subselect` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/swap-stroke-fill.svg` | 547 | Phosphor — icon `swap-stroke-fill` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/toggle-screen-mode.svg` | 427 | Phosphor — icon `toggle-screen-mode` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/type.svg` | 212 | Phosphor — icon `type` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/vector-path.svg` | 439 | Phosphor — icon `vector-path` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/wand-sparkles.svg` | 597 | Phosphor — icon `wand-sparkles` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
+| `assets/icons-phosphor/zoom.svg` | 347 | Phosphor — icon `zoom` | MIT (Phosphor Icons) | `assets/icons/LICENSE-phosphor.txt` | L25 (`assets/icons-phosphor/*.svg`) | yes |
 
 ## The other shipped files
 
 | File | Bytes | What it is | Attribution row |
 |---|---:|---|---|
-| `assets/icons/LICENSE-lucide.txt` | 3,208 | The Lucide licence (ISC) and the Feather licence (MIT) for the icons above | L25 (`assets/icons/*.svg`) |
-| `assets/icons/hicolor/256x256/apps/firecraft.png` | 15,000 | The Linux desktop application icon | L43 (`assets/icons/hicolor/256x256/apps/firecraft.png`), L52 (`assets/icons/hicolor/256x256/apps/firecraft.png`) |
+| `assets/icons/LICENSE-phosphor.txt` | 646 | The Phosphor licence (MIT) for the tool/UI icons above | L25 (`assets/icons-phosphor/*.svg`) |
+| `assets/icons/hicolor/256x256/apps/firecraft.png` | 15,000 | The Linux desktop application icon | L44 (`assets/icons/hicolor/256x256/apps/firecraft.png`), L53 (`assets/icons/hicolor/256x256/apps/firecraft.png`) |
 
 ## Measured size cost in the web bundle
 

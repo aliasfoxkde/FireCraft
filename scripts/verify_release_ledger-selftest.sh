@@ -114,7 +114,7 @@ mutate_no_date() {
 }
 
 mutate_no_blocker() {
-  set_board_cell T27-09 9 "—"
+  set_board_cell T27-61 9 "—"
 }
 
 mutate_unknown_status() {
