@@ -793,11 +793,10 @@ fn stage_web() -> Result<Vec<PathBuf>, String> {
         eprintln!("[xtask] warning: wasm CDN patch failed: {e}");
     }
 
-    // Pre-compress .wasm and .js files with gzip so the web server can serve
-    // compressed versions. This is essential because the WASM binary (~92 MB)
-    // exceeds Cloudflare Pages' 25 MB per-object limit; gzip brings it under
-    // the threshold. The serving HTTP server (in serve.py or the web server)
-    // must also send the appropriate Content-Encoding header.
+    // Stage gzip sidecars for servers configured to negotiate pre-compressed
+    // assets. Sidecars reduce transfer bytes only when the host serves them
+    // with Content-Encoding; they do not change the raw WASM size or any
+    // upload/per-object limit. Keep the raw module budget separate.
     let compressible = &[".wasm", ".js", ".html"];
     let mut to_add = Vec::new();
     for path in &staged {

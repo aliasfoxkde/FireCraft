@@ -33,8 +33,10 @@
   These measures answer different questions: DOM verbs,
   shell-bound commands, and complete end-user UI/workflow parity must
   not be conflated.
-- **Menu census:** 2 inert rows of 298. The 19.6 menu-wiring campaign is
-  complete; eight additional rows are explicitly feature/evidence-gated.
+- **Menu census:** the CS6 baseline is 298 rows; this isolated branch adds
+  two FireCraft Help links, for 300 total and still 2 inert. The 19.6
+  menu-wiring campaign is complete; eight additional rows are explicitly
+  feature/evidence-gated. This branch-specific count is not a main receipt.
 - **Delivered work:** Phase 21's user-facing deliverables landed with
   #107. Phase 20.1–20.3 and 20.5–20.7 are on main (Optimize/timeline
   #118 merged); the mask stack landed in #113 (stack, fold, level
@@ -167,10 +169,13 @@ verifiable.
 ### Current program: Phases 20–22
 
 Phase 19's canvas work and menu wiring campaign (batches 1–17) are
-complete. The live menu census is 2 inert rows of 298; eight other rows
-have explicit feature/evidence gates and are not considered inert.
+complete. The main menu baseline is 2 inert rows of 298; this isolated
+branch adds two Help links (300 total). Eight other rows have explicit
+feature/evidence gates and are not considered inert.
 Path-node add/delete, the reachability gate, and the wasm budget
-re-pin are also complete.
+re-pin are also complete. The main menu baseline is 298 rows; the isolated
+product/UX branch adds two Help entries (300 total) without changing the
+CS6 census.
 
 - **CS6 keymap parity (2026-11-10, decisions 0080 + 0085):** every
   accelerator the menu bar prints is bound at the printed key.

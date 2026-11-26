@@ -1,7 +1,6 @@
 //! Numeric constants extracted from Fireworks CS6's Fireworks.exe.
 //! Every constant is cited with its source function address.
 #![allow(rustdoc::invalid_html_tags)]
-#![allow(rustdoc::invalid_rust_tags)]
 
 /// Default canvas width in pixels (1920 px Full HD default).
 pub const DEFAULT_WIDTH: f32 = 1920.0;
