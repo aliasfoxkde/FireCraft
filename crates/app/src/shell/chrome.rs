@@ -1,5 +1,5 @@
 //! CS6 Studio workspace chrome extracted from the Experiment UX design and
-//! wired directly onto FireCraft's real `Editor` + `engine::Session` command
+//! wired directly onto `FireCraft`'s real `Editor` + `engine::Session` command
 //! registry:
 //! - Header bar (10 CS6 menus + quick Open/Hand/Zoom + Zoom combo + Palette / Full / Theme / Workspace)
 //! - Main Toolbar (File / Edit / History / Arrange / Transform / Demo Showcase)
@@ -36,7 +36,7 @@ impl CanvasViewMode {
     ];
 }
 
-/// Map a FireCraft [`Tool`] to its crisp programmatic [`vector_icons::Icon`].
+/// Map a `FireCraft` [`Tool`] to its crisp programmatic [`vector_icons::Icon`].
 #[must_use]
 pub(crate) fn tool_vector_icon(tool: Tool) -> Icon {
     match tool {
@@ -302,7 +302,7 @@ impl Shell {
         }
     }
 
-    /// Replace the active document with the 1920×1080 FireCraft Studio Showcase.
+    /// Replace the active document with the 1920×1080 `FireCraft` Studio Showcase.
     pub(crate) fn load_demo_showcase(&mut self) {
         self.editor = demo::build_showcase_editor();
         self.doc_name = "FireCraft_Showcase.fw.png".to_owned();

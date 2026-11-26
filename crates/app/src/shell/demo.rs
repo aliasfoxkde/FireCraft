@@ -1,7 +1,7 @@
-//! Real FireCraft Studio 1080p Showcase document builder.
+//! Real `FireCraft` Studio 1080p Showcase document builder.
 //!
 //! Constructs an editable 1920×1080 showcase through the real `engine` command
-//! registry (vector cards, multi-layer FireCraft flame emblem, typography,
+//! registry (vector cards, multi-layer `FireCraft` flame emblem, typography,
 //! CTA button, and web slice), so every element on screen is genuinely
 //! selectable, editable, undoable, and exportable to `.fw.png`.
 
@@ -21,7 +21,7 @@ fn latest_object_id(editor: &Editor) -> Option<ObjectId> {
     cell.elements.last().copied()
 }
 
-/// Build a fresh 1920×1080 FireCraft Studio Showcase `Editor`.
+/// Build a fresh 1920×1080 `FireCraft` Studio Showcase `Editor`.
 #[must_use]
 pub fn build_showcase_editor() -> Editor {
     let mut editor = Editor::untitled();
@@ -29,7 +29,7 @@ pub fn build_showcase_editor() -> Editor {
     editor
 }
 
-/// Populate `editor` with the FireCraft Studio showcase sized to `w × h`.
+/// Populate `editor` with the `FireCraft` Studio showcase sized to `w × h`.
 pub fn populate_showcase(editor: &mut Editor, w: f64, h: f64) {
     let page = editor.page;
     let layer = editor.active_layer;

@@ -6,12 +6,16 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+#[cfg(feature = "native")]
 use app::editor::{Editor, Tool};
+#[cfg(feature = "native")]
 use engine::Session;
+#[cfg(feature = "native")]
 use engine::platform::{FileSystem, MemoryFs};
 
 /// A GUI-shaped session: the untitled seeds, a drag-created rectangle,
 /// a display edit, and a rename — every row through the registry.
+#[cfg(feature = "native")]
 fn gui_session() -> Editor {
     let mut editor = Editor::untitled();
     editor.tool = Tool::Rect;

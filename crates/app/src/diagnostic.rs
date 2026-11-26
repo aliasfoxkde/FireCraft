@@ -3,7 +3,7 @@
 
 use std::fmt::Write as _;
 
-/// Schema identifier for FireCraft diagnostic payloads.
+/// Schema identifier for `FireCraft` diagnostic payloads.
 pub const DIAGNOSTIC_SCHEMA: &str = "firecraft-diagnostic/v1";
 
 /// User-consented diagnostic payload for bug reports and feedback.
