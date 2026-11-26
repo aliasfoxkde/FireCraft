@@ -3341,7 +3341,9 @@ mod tests {
     use super::*;
     #[allow(unused_imports)]
     use crate::editor::union_selection_bounds;
-    use engine::platform::{FileSystem, MemoryFs};
+    #[cfg(feature = "native")]
+    use engine::platform::FileSystem;
+    use engine::platform::MemoryFs;
 
     /// Scripted dialogs: the steps path answers the replay/save
     /// picks, the document path the base pick — matched by title.
