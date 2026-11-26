@@ -2151,6 +2151,7 @@ mod tests {
             }
         });
 
+        output.textures_delta.clear();
         assert!(!output.shapes.is_empty());
     }
 }
