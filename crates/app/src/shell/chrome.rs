@@ -2019,14 +2019,22 @@ impl Shell {
                         .show(ui, |ui| {
                             ui.label(RichText::new("W:").small().color(p.text_dim));
                             changed |= ui
-                                .add(egui::DragValue::new(&mut w).speed(1.0).range(1.0..=65535.0))
+                                .add(
+                                    egui::DragValue::new(&mut w)
+                                        .speed(1.0)
+                                        .range(1.0..=65_535.0),
+                                )
                                 .changed();
                             ui.label(RichText::new("X:").small().color(p.text_dim));
                             changed |= ui.add(egui::DragValue::new(&mut x).speed(1.0)).changed();
                             ui.end_row();
                             ui.label(RichText::new("H:").small().color(p.text_dim));
                             changed |= ui
-                                .add(egui::DragValue::new(&mut h).speed(1.0).range(1.0..=65535.0))
+                                .add(
+                                    egui::DragValue::new(&mut h)
+                                        .speed(1.0)
+                                        .range(1.0..=65_535.0),
+                                )
                                 .changed();
                             ui.label(RichText::new("Y:").small().color(p.text_dim));
                             changed |= ui.add(egui::DragValue::new(&mut y).speed(1.0)).changed();
