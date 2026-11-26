@@ -508,3 +508,10 @@ Phase 10 defects passed every desktop gate. The working pattern
 Before starting broad integration or release work, read the [1.0 Consolidation and Release Handoff](planning/FIRECRAFT-1.0-CONSOLIDATION-AND-RELEASE-HANDOFF.md), [Product Expansion Roadmap](planning/FIRECRAFT-PRODUCT-ROADMAP-AND-EXPANSION.md), and [Marketing Site Roadmap](MARKETING-SITE-ROADMAP.md). The marketing site is a 1.0 deliverable. It lives in `site/` and deploys to its own Cloudflare Pages project; the WASM editor is built to `dist/web` and deploys separately. Historical project names are `firecraft-site` and `firecraft-web`; revalidate them against the current Cloudflare configuration before deployment. Do not infer deployment success from local build success.
 
 The product expansion roadmap is strategic, not a live task list. `TASKS.md` remains authoritative; only create bounded, owner-approved tickets after auditing current source and active worktrees. Preserve local work, verify all PR ancestry and unique changes, and require human approval for production promotion.
+
+
+## 9. Expanded 1.0 release execution
+
+Before implementation, read [FIRECRAFT-1.0-END-TO-END-EXECUTION-AND-RELEASE-CLOSEOUT.md](planning/FIRECRAFT-1.0-END-TO-END-EXECUTION-AND-RELEASE-CLOSEOUT.md). It adds the exact local CraftAnything experiment location, preservation/audit procedure, staged UI integration, README/wiki/contributor refactor, full Windows/macOS/Linux/WASM package matrix, GitHub draft-first release process, issue/PR/branch closeout and final 1.0 certification.
+
+The experiment path /nas/Temp/repo/FireCraft-CraftAnything-Experiment was not accessible in the plan-authoring environment. Inspect it directly on the owner's machine before deciding what to import. The owner-requested full release scope also requires formal reconciliation with decisions 0075 and 0070. Do not infer installed/published/certified states from packaging recipes.
