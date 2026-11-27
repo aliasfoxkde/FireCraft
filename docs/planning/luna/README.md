@@ -2,8 +2,8 @@
 
 > **Prepared by:** Neon Forensic Audit & Integration Pass (2026-11-26)
 > **Target executor:** **GPT-6-Luna** (excels at strictly following narrow, single-goal, verifiable task cards)
-> **Canonical repo & branch:** `/nas/Temp/repos/FireCraft` on branch `integration/firecraft-1.0` (PR `#189`) — all work MUST be committed in the repo and pushed to `gitforge` + `origin` (never keep unversioned work in `/var/tmp`)
-> **Read-only UI reference:** `/nas/Temp/repos/FireCraft-CraftAnything-Experiment` *(NEVER edit or copy proprietary assets)*
+> **Canonical repo & branch:** `/nas/Temp/repos/FireCraft` (worktree `.worktrees/integration-firecraft-1.0`, branch `feat/phase1-visual-polish`, ahead of `main` `5a5a1b2c`) — all work MUST be committed in the repo and pushed to `gitforge` + `origin` (never keep unversioned work in `/var/tmp`)
+> **Read-only UI reference:** `/nas/Temp/repos/FireCraft-CraftAnything-Experiment` (`v0.3.0`, `e415a33` / `6233a49`) — see full 14-domain diff in [`docs/integration/2026-11-26-experiment-deep-audit.md`](../../integration/2026-11-26-experiment-deep-audit.md) *(NEVER edit or copy proprietary assets)*
 > **Atomic checklist & receipts:** [`PROGRESS.md`](PROGRESS.md) · **Live repo board:** [`docs/TASKS.md`](../../TASKS.md)
 
 ---
@@ -84,9 +84,9 @@ file /nas/Temp/repos/FireCraft/dist/windows-review/firecraft.exe && sha256sum /n
 
 ```mermaid
 flowchart TD
-    B["Baseline Complete (Neon 2026-11-26)<br/>CS6 Studio UI + Clean-Room + CI & WASM Fixes"] --> P1["Phase 1: PR #189 CI, Visual Bugs & WASM Smoke<br/>(L1.1 - L1.5)"]
-    P1 --> P2["Phase 2: Full Phosphor Icons Unification<br/>(L2.1 - L2.6)"]
-    P2 --> P3["Phase 3: Core UX Features & Windows Review<br/>(L3.1 - L3.8)"]
+    B["Baseline Complete (Neon 2026-11-26)<br/>CS6 Studio UI + Clean-Room + CI & Live WASM"] --> P1["Phase 1: Live P0 Fixes & Core Experiment Parity<br/>(L1.1 - L1.16)"]
+    P1 --> P2["Phase 2: Embedded Phosphor Font Unification<br/>(L2.1 - L2.6)"]
+    P2 --> P3["Phase 3: Floating Docks, Multi-Monitor, Dialogs & Harness<br/>(L3.1 - L3.11)"]
     P3 --> P4["Phase 4: Binary/WASM Optimization, Minification & Brotli/Gzip<br/>(L4.1 - L4.8)"]
     P4 --> P5["Phase 5: Modular Folders (examples/, libraries/, extensions/, modules/)<br/>(L5.1 - L5.8)"]
     P5 --> P6["Phase 6: Site, Docs, Live Wiki & OS Taskbar Launchers<br/>(L6.1 - L6.10)"]
@@ -96,9 +96,9 @@ flowchart TD
 
 | Phase | Pack File | Scope | Tasks | Human Gates |
 |---|---|---|---|---|
-| **1** | [`PHASE-1-CI-AND-VISUAL-POLISH.md`](PHASE-1-CI-AND-VISUAL-POLISH.md) | PR `#189` CI green + merge, fix 3 visually-caught UI glitches, Playwright WASM smoke | `L1.1`–`L1.5` | `L1.1` (merge PR `#189`) |
-| **2** | [`PHASE-2-PHOSPHOR-ICONS.md`](PHASE-2-PHOSPHOR-ICONS.md) | Audit & vendor missing MIT Phosphor icons, unify Tools/Toolbar/Tabs/Footer/Panels/Align/Path, Dark/Light/HiDPI proof | `L2.1`–`L2.6` | `L2.6` (icon visual sign-off) |
-| **3** | [`PHASE-3-CORE-UX-FEATURES.md`](PHASE-3-CORE-UX-FEATURES.md) | Drag ghost & edge snap (`P2.6`), Feedback modal (`P8.2`), Command Palette discovery, `Open Recent`/Pinned + CLI (`T30.1–T30.2`), Windows review `.exe` | `L3.1`–`L3.8` | `L3.8` (Windows 11 review) |
+| **1** | [`PHASE-1-CI-AND-VISUAL-POLISH.md`](PHASE-1-CI-AND-VISUAL-POLISH.md) | PR `#189` merged + live WASM fixed (`L1.1`–`L1.5`), flame logo, `ThemeMode::System` + WCAG tests, stable tabs, canvas clip/Z-order, perf/Optimize fix, `text_edit_focused()` shortcuts, `Alt+` menus/right-click, Styles/Layers/Properties, God View `∞ Canvas`, Tools/Amber Diamonds | `L1.1`–`L1.16` | `L1.1` (done) |
+| **2** | [`PHASE-2-PHOSPHOR-ICONS.md`](PHASE-2-PHOSPHOR-ICONS.md) | Audit & embed MIT `Phosphor-Regular.ttf` font (Experiment `v0.3.0` architecture, zero `resvg` bloat), unify Tools/Toolbar/Tabs/Footer/Panels/Layers/Welcome, Dark/Light/HiDPI proof | `L2.1`–`L2.6` | `L2.6` (icon visual sign-off) |
+| **3** | [`PHASE-3-CORE-UX-FEATURES.md`](PHASE-3-CORE-UX-FEATURES.md) | Floating panels + `panel_geometry.rs` snap/stack/ghost + 6 presets, Feedback dialog, 7-category Command Palette, persisted `Open Recent` + `File` print/preview + CLI, Multi-Monitor OS windows + dirty close queue, 4-mode Find/Replace + Splash + Updater, `Intelligence` AI tab + MCP Console + Headless GUI Harness, Windows 11 review | `L3.1`–`L3.11` | `L3.11` (Windows 11 review) |
 | **4** | [`PHASE-4-BINARY-AND-WASM-OPT.md`](PHASE-4-BINARY-AND-WASM-OPT.md) | `twiggy` baseline, web profile + `wasm-opt -Oz --strip-*`, build-time Phosphor atlas/font (drops runtime `resvg`), font audit, JS minification/mangling, Brotli `.br` + Gzip `.gz` | `L4.1`–`L4.8` | `L4.8` (size report sign-off) |
 | **5** | [`PHASE-5-MODULAR-FOLDERS-AND-EXTENSIONS.md`](PHASE-5-MODULAR-FOLDERS-AND-EXTENSIONS.md) | Split `examples/`, `libraries/`, desktop+WASM lazy loader, `extensions/` contract + 2 real extensions (`T31.4`), lazy WASM `modules/` (`T31.3`), archive layout check | `L5.1`–`L5.8` | `L5.8` (modular layout sign-off) |
 | **6** | [`PHASE-6-SITE-DOCS-WIKI-AND-LAUNCHERS.md`](PHASE-6-SITE-DOCS-WIKI-AND-LAUNCHERS.md) | Multi-page `site/`, `app.js` + preview deploy, `README.md`/core docs, `docs/wiki/` + templates + wiki sync, Linux `.desktop` / Windows Jump List / macOS Dock (`T30.3–T30.5`) | `L6.1`–`L6.10` | `L6.4`, `L6.7` |
