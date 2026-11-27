@@ -78,9 +78,18 @@ test("published pages reference existing local assets and sitemap routes", async
     }
   }
   const sitemap = await readFile(new URL("../site/sitemap.xml", import.meta.url), "utf8");
-  assert.match(sitemap, /firecraft-site\.pages\.dev\//);
-  assert.match(sitemap, /firecraft-site\.pages\.dev\/extensions\.html/);
+  const robots = await readFile(new URL("../site/robots.txt", import.meta.url), "utf8");
+  assert.match(sitemap, /marketing-review\.firecraft-web\.pages\.dev\//);
+  assert.match(sitemap, /marketing-review\.firecraft-web\.pages\.dev\/extensions\.html/);
+  assert.match(robots, /Sitemap: https:\/\/marketing-review\.firecraft-web\.pages\.dev\/sitemap\.xml/);
   assert.doesNotMatch(sitemap, /features\.html|downloads\.html|gallery\.html/);
+});
+
+test("main-branch deployment publishes a review preview without replacing the WebAssembly app", async () => {
+  const workflow = await readFile(new URL("../.github/workflows/deploy-site.yml", import.meta.url), "utf8");
+  const target = workflow.match(/command:\s*pages deploy site --project-name=([\w-]+) --branch=([\w-]+)/);
+  assert.ok(target, "the Pages deploy target must be explicit");
+  assert.deepEqual(target.slice(1), ["firecraft-web", "marketing-review"]);
 });
 
 function contrastRatio(foreground, background) {
