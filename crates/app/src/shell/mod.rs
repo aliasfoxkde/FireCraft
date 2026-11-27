@@ -1470,7 +1470,7 @@ impl Shell {
                 if let Some(index) = {
                     #[cfg(feature = "native")]
                     {
-                        &crate::shell::dialogs::EXPORT_FORMATS
+                        crate::shell::dialogs::EXPORT_FORMATS
                     }
                     #[cfg(not(feature = "native"))]
                     {

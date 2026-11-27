@@ -171,14 +171,21 @@ pub async fn start() -> Result<(), wasm_bindgen::JsValue> {
         .add_event_listener_with_callback("message", message_callback.as_ref().unchecked_ref())?;
     message_callback.forget();
 
+    let embedded = window
+        .parent()
+        .ok()
+        .flatten()
+        .is_some_and(|parent| parent != window);
+
     runner
         .start(
             canvas,
             eframe::WebOptions::default(),
-            Box::new(|cc| {
+            Box::new(move |cc| {
                 // The web build has no `Shell::new`, so the chrome
-                // theme has to be applied here — without it the
-                // deployed app rendered egui's default light chrome.
+                // theme and CS6 Studio workspace defaults have to be
+                // applied here — without them the deployed browser app
+                // rendered an empty right dock and blank canvas.
                 app::shell::apply_chrome_theme(&cc.egui_ctx);
                 let (editor, restored) = match restore_document() {
                     Some(editor) => (editor, true),
@@ -192,6 +199,7 @@ pub async fn start() -> Result<(), wasm_bindgen::JsValue> {
                 // The persisted panel set and dock folds come back from
                 // localStorage, the same way they do on the desktop.
                 shell.restore_layout(cc.storage);
+                shell.apply_web_studio_defaults(restored, embedded);
                 if restored {
                     shell.status = "restored session (File ▸ New clears it)".to_owned();
                     shell.set_doc_name("untitled (restored)");
@@ -298,7 +306,10 @@ fn base64_decode(text: &str) -> Result<Vec<u8>, base64::DecodeError> {
 /// Loads document bytes into the shell through the standard read path.
 #[cfg(target_arch = "wasm32")]
 fn open_bytes(runner: &std::rc::Rc<eframe::WebRunner>, bytes: &[u8]) {
-    match with_app(runner, |shell| shell.load_document_bytes(bytes)) {
+    match with_app(runner, |shell| {
+        shell.dismiss_welcome();
+        shell.load_document_bytes(bytes)
+    }) {
         Some(Ok(())) => reply_status("opened", true, None),
         Some(Err(error)) => reply_status("opened", false, Some(&error.to_string())),
         None => reply_status("opened", false, Some("app is not running")),

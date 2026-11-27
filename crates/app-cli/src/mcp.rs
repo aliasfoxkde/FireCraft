@@ -232,7 +232,7 @@ fn tool_call(
     match name {
         "firecraft.apply" => apply_tool(session, id, &arguments),
         "firecraft.info" => info_tool(session, id),
-        "firecraft.export" => export_tool(session, &fs, id, &arguments),
+        "firecraft.export" => export_tool(session, fs, id, &arguments),
         "firecraft.undo" => undo_tool(session, id, false),
         "firecraft.redo" => undo_tool(session, id, true),
         "firecraft.listCommands" => list_commands_tool(session, id),

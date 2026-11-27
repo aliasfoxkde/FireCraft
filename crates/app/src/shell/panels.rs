@@ -3996,18 +3996,17 @@ impl Shell {
         #[cfg(feature = "native")]
         if cfg!(feature = "native") {
             let DisplayState {
-                opacity,
+                opacity: _opacity,
                 blend,
-                visible,
-                locked,
-                name,
+                visible: _visible,
+                locked: _locked,
+                name: _name,
             } = state;
-            let opacity = opacity;
             let _blend_names = color::BlendMode::ALL
                 .iter()
                 .map(|m| m.as_str())
                 .collect::<Vec<&str>>();
-            let blend = (blend as usize).min(_blend_names.len().saturating_sub(1));
+            let _blend = (blend as usize).min(_blend_names.len().saturating_sub(1));
         }
     }
 

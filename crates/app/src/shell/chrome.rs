@@ -224,6 +224,35 @@ impl Shell {
         self.load_demo_showcase();
     }
 
+    /// Configure the CS6 Studio workspace for the browser (WASM) build.
+    ///
+    /// Always guarantees the 4-group CS6 right dock, top/left rulers, and bottom
+    /// Properties inspector are active (even when upgrading an older persisted
+    /// layout from `localStorage`). On a fresh standalone visit, loads the 1080p
+    /// Studio Showcase and shows the Welcome modal; inside an embedded host
+    /// iframe (`WebOS` / bridge smoke), suppresses the modal so `postMessage`
+    /// automation drives the canvas directly.
+    pub fn apply_web_studio_defaults(&mut self, restored: bool, embedded: bool) {
+        self.show_rulers = true;
+        self.show_bottom_inspector = true;
+        self.bottom_collapsed = false;
+        self.bottom_height = 148.0;
+        self.apply_workspace_preset("Expanded Mode");
+        if self.panel_groups.is_empty() {
+            self.ensure_cs6_dock_groups();
+        }
+        self.show_welcome = !restored && !embedded;
+        if !restored {
+            self.load_demo_showcase();
+        }
+    }
+
+    /// Dismiss the startup Welcome modal (for example after opening a document
+    /// through the browser file picker or `postMessage` bridge).
+    pub fn dismiss_welcome(&mut self) {
+        self.show_welcome = false;
+    }
+
     /// Switch workspace layout presets (Expanded Mode, Iconic Mode, Compact Mode).
     pub(crate) fn apply_workspace_preset(&mut self, preset: &'static str) {
         self.workspace_preset = preset;
