@@ -794,7 +794,7 @@ zip-code	./docs/tasks/T27-41-windows-arm64-assessment.md	b3cb7d030fce5d1824bae20
 zip-code	./playwright.config.js	891937cb335016e9c7074c3781dcb1364e0c660733a8889bbeae83e6aa759be6	1
 zip-code	./scripts/ci_refresh_stale_crates-selftest.sh	b045dd9c18caa8be1e17a4b902152cc1fd292b242b7b9dd74ba8c40896239424	1
 zip-code	./site/assets/app-preview-dark.svg	16b024b09ebcb9d66f6a9968858d7e01081e51a14a4922edf3c8e3c2009c0000	1
-zip-code	./web/test.spec.ts	d55d01d0341ed0ba2cd99b322e8c5b609254f47d10c7cd12b99b4922effeba44	1
+australian-tfn	./crates/app/src/assets/logo.svg	f492c97447d0a3470607df9e58805f9ae4bce734724727b440b22e2e81db374f	1
 zip-code	./xtask/schema/cyclonedx-bom-1.5.schema.json	2f8c341cfba7dbae13b543198125c62c118349e8ff38ca7a4c4593a4819550c8	1
 zip-code	./xtask/schema/cyclonedx-bom-1.5.schema.json	d66d3f2c187ac5996d755bd3b2695ea0acb0ada05ab3863041b30df40ba7426a	3
 zip-code	./xtask/schema/cyclonedx-bom-1.5.schema.json	dc137b7c3d59a3512aa33b3913ab0403af3243e29849ed6792734534d25b94d5	2
