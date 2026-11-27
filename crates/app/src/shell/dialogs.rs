@@ -97,17 +97,12 @@ pub(crate) fn web_workflow(index: usize) -> Option<webexport::Workflow> {
 }
 
 /// HTML export style (File ▸ HTML Setup).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum HtmlExportStyle {
+    #[default]
     Html5,
     Xhtml1,
     CssGrid,
-}
-
-impl Default for HtmlExportStyle {
-    fn default() -> Self {
-        HtmlExportStyle::Html5
-    }
 }
 
 /// Paper size for page setup.
@@ -173,7 +168,7 @@ pub(crate) struct PageSetupDialog {
     pub margin_in: f64,
     /// Fit artwork to page.
     pub fit_to_page: bool,
-    /// Scale percentage (10..=400, used when !fit_to_page).
+    /// Scale percentage (10..=400, used when `!fit_to_page`).
     pub scale_pct: i32,
     /// Print guides and slice overlays.
     pub print_guides: bool,
@@ -424,14 +419,15 @@ impl Shell {
         ui.heading("Web Layer");
         let page = self.editor.page;
         let frame = self.editor.frame;
-        let rows: Vec<(
+        type WebRow = (
             doc::ObjectId,
             String,
             bool,
             Option<String>,
             Option<String>,
             i64,
-        )> = {
+        );
+        let rows: Vec<WebRow> = {
             let document = self.editor.document();
             let Some(layer) = document.pages.get(page).and_then(|page| {
                 page.layers
