@@ -1,3 +1,16 @@
+## 2026-11-26 — Live WASM Studio fix, 14-domain Experiment v0.3.0 audit & handoff
+
+- **Branch / Worktree:** `feat/phase1-visual-polish` in `.worktrees/integration-firecraft-1.0` (ahead of `main` `5a5a1b2c` after PR `#189` squash merge).
+- **Live WASM & CI Fixes (`98812b17` / Pages `c2d3596a`):**
+  - Diagnosed stale Nov 3 `v0.2.5` WASM deployed to `https://firecraft-web.pages.dev` and missing `apply_studio_defaults()` in `web/src/main.rs`.
+  - Wired `apply_web_studio_defaults()` + `dismiss_welcome()`, fixed native/workspace clippy errors (`mcp.rs`, `panels.rs`, `mod.rs`, `dialogs.rs`), native MCP tests, and `scripting` feature forwarding in `crates/app/Cargo.toml`.
+  - Installed static musl `trunk 0.21.14` at `fedora:~/.local/bin/trunk`; ran `xtask dist --web` (`c8df704b0f48d240_bg.wasm`, 12.98 MB raw / 4.7 MB gzip, `smoke green`), deployed live (`c2d3596a`), and visually verified via headless Chromium on `fedora`.
+- **Deep 14-Domain Audit vs `FireCraft-CraftAnything-Experiment` (`v0.3.0` `e415a33`/`6233a49`):**
+  - Documented exact source root causes for all 10 live-review defects + 6 dead stub fields in `docs/integration/2026-11-26-experiment-deep-audit.md` and `docs/integration/2026-11-26-live-review-defects.md`.
+  - Expanded GPT-6-Luna atomic roadmap in `docs/planning/luna/{README,PROGRESS,PHASE-1..8}.md` (`L1.6`–`L1.16`, `L2.1`–`L2.6` embedded MIT `Phosphor-Regular.ttf` font, `L3.1`–`L3.11`), reconciled `docs/PLAN.md` & `docs/TASKS.md`, normalized all Fedora/t5500 build paths to `/var/tmp/firecraft-int-1.0-git`, and mirrored `luna/` to `/nas/Temp/repos/FireCraft/plan/luna/`.
+- **Gate Status:** `app --features native`, `app-cli`, `xtask`, `clippy --workspace --all-targets -- -D warnings`, `wasm32`, `layers`, `toolchain`, `panel-snapshot`, `reachability` (`257/257`), `icon-survey`, and `aegis` all verified green on `fedora`.
+- **Next:** Start at `L1.6` in `docs/planning/luna/PROGRESS.md` (or focus on `FireCraft-CraftAnything-Experiment` per maintainer priority).
+
 ## 2026-11-21 — Comprehensive production work session
 
 ### WASM CDN + Proxy ✅ COMPLETE

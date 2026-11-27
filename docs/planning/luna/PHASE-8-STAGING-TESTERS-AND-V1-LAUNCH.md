@@ -9,7 +9,7 @@
 - **Files:** `docs/planning/luna/PROGRESS.md` (staging receipts)
 - **Pre-check:**
   ```bash
-  test -s /nas/Temp/repos/FireCraft/docs/release/ARTIFACT-MATRIX.md
+  test -s docs/release/ARTIFACT-MATRIX.md
   ```
 - **Do:**
   1. Deploy staging previews (`firecraft-site` branch `rc-v1`, `firecraft-web` branch `rc-v1`) from the exact RC build bytes — NEVER touch production `main`!
@@ -41,7 +41,7 @@
   2. Test preview-branch rollback cleanly without touching production; document exact recovery time and steps.
 - **Verify:**
   ```bash
-  grep -i "rollback" /nas/Temp/repos/FireCraft/docs/RELEASING.md | head -n 10
+  grep -i "rollback" docs/RELEASING.md | head -n 10
   ```
 - **Done when:** Verified rollback steps and deployment IDs are documented and tested on preview.
 
@@ -59,7 +59,7 @@
 - **Files:** 8 version-stamped files (`xtask stamps`), `.github/CHANGELOG.md`, `docs/releases/v1.0.0.md`
 - **Pre-check:**
   ```bash
-  ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /nas/Temp/repos/FireCraft-git && cargo run -p xtask -- stamps'
+  ssh fedora 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && cargo run -p xtask -- stamps'
   ```
 - **Do:**
   1. Stamp `1.0.0` across all 8 version files, finalize `.github/CHANGELOG.md` and `docs/releases/v1.0.0.md`, and verify full `cargo run -p xtask -- ci` is green on `fedora`.
@@ -91,6 +91,6 @@
   2. Write `docs/releases/v1.0.0-launch-report.md` with exact version, tag, 40-char SHA, CI run IDs, Cloudflare deployment & rollback IDs, complete asset table (filename, target, size, SHA-256, signing status, verification rung, host/date), synced Wiki SHA, issue/PR/branch disposition totals, and honest known limitations.
 - **Verify:**
   ```bash
-  test -s /nas/Temp/repos/FireCraft/docs/releases/v1.0.0-launch-report.md
+  test -s docs/releases/v1.0.0-launch-report.md
   ```
 - **Done when:** Public endpoints pass hash verification and the complete Launch Report is committed.

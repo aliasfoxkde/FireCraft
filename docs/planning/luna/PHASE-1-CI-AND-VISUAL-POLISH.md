@@ -27,7 +27,7 @@
   3. Capture and visually inspect desktop & web Welcome screenshots confirming the true FireCraft flame icon appears in OS window chrome, browser favicon, and Welcome modal.
 - **Verify:**
   ```bash
-  ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo run -p xtask -- aegis'
+  ssh fedora 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo run -p xtask -- aegis'
   ```
 - **Done when:** Window icon, browser favicon, and Welcome modal all display the crisp FireCraft flame mark.
 
@@ -47,7 +47,7 @@
   3. Port Experiment's WCAG 2.1 `relative_luminance` / `contrast_ratio` unit tests (`theme.rs:259-320`) asserting `>= 4.5:1` body/accent contrast and `>= 3.0:1` dim text contrast on both Dark and Light palettes.
 - **Verify:**
   ```bash
-  ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app theme && cargo clippy -p app --all-targets -- -D warnings'
+  ssh fedora 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app theme && cargo clippy -p app --all-targets -- -D warnings'
   ```
 - **Done when:** Fresh launch defaults to `Auto / System`, detects OS/browser theme cleanly, and passes WCAG AA contrast tests.
 
@@ -68,7 +68,7 @@
   4. Add unit tests covering 3-tab create -> switch to index 2 -> switch to index 1 -> swap -> close index 0 -> verify active highlight index remains stable.
 - **Verify:**
   ```bash
-  ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo clippy -p app --all-targets -- -D warnings'
+  ssh fedora 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo clippy -p app --all-targets -- -D warnings'
   ```
 - **Done when:** Tabs stay in stable order, highlight the exact active tab in place, support drag-to-swap + MRU overflow + bulk close menu.
 
@@ -88,7 +88,7 @@
   3. Capture and visually inspect a zoomed-in screenshot with an open dialog & dropdown menu overlapping the canvas.
 - **Verify:**
   ```bash
-  ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo clippy -p app --all-targets -- -D warnings && cargo run -p xtask -- panel-snapshot'
+  ssh fedora 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo clippy -p app --all-targets -- -D warnings && cargo run -p xtask -- panel-snapshot'
   ```
 - **Done when:** Canvas stays strictly clipped to its viewport rect and floating windows, menus, and dialogs always paint cleanly above it.
 
@@ -109,7 +109,7 @@
   4. Add unit tests asserting: (a) idle/scroll frames trigger zero `compose::render` calls, and (b) Optimize panel open on startup triggers zero synchronous PNG encode/decode.
 - **Verify:**
   ```bash
-  ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo clippy -p app --all-targets -- -D warnings && cargo run -p xtask -- dist --web'
+  ssh fedora 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo clippy -p app --all-targets -- -D warnings && cargo run -p xtask -- dist --web'
   ```
 - **Done when:** Startup, scrolling, zooming, tab switching, and editing feel crisp with zero main-thread stalls on desktop and WASM.
 
@@ -131,7 +131,7 @@
   5. Add unit tests covering every shortcut priority and proving a clicked tab/button does NOT block `V`/`U`/`Tab`/`Esc`.
 - **Verify:**
   ```bash
-  ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo clippy -p app --all-targets -- -D warnings'
+  ssh fedora 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo clippy -p app --all-targets -- -D warnings'
   ```
 - **Done when:** All core tool, `Esc`, `Tab`/`Shift+Tab`/`F11`, wheel/pinch, and cycling shortcuts match Experiment reliably on desktop & WASM.
 
@@ -152,7 +152,7 @@
   4. Verify `menus::tests` and `xtask reachability` (`257/257`) remain 100% green; add unit tests for `Alt+` mnemonics and right-click pick + dispatch.
 - **Verify:**
   ```bash
-  ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo run -p xtask -- reachability && cargo run -p xtask -- aegis'
+  ssh fedora 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo run -p xtask -- reachability && cargo run -p xtask -- aegis'
   ```
 - **Done when:** Top menus support `Alt+` mnemonics + arrow navigation and right-click menus match Experiment's polish with 257/257 reachability.
 
@@ -172,7 +172,7 @@
   3. Capture and visually inspect desktop & WASM screenshots showing both Styles thumbnails and Layers object tree.
 - **Verify:**
   ```bash
-  ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo clippy -p app --all-targets -- -D warnings && cargo run -p xtask -- panel-snapshot && cargo run -p xtask -- reachability && cargo run -p xtask -- aegis'
+  ssh fedora 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo clippy -p app --all-targets -- -D warnings && cargo run -p xtask -- panel-snapshot && cargo run -p xtask -- reachability && cargo run -p xtask -- aegis'
   ```
 - **Done when:** Styles displays rendered 6-library thumbnail grids and Layers displays blend/opacity + indented object hierarchy with color swatches.
 
@@ -192,7 +192,7 @@
   3. Wrap `properties_body` in a vertical `ScrollArea` so the 2nd property row never clips at the `118 px` dock height, and verify Color Palette `Selector | Mixers | Blender` 12-step blend ramp works cleanly.
 - **Verify:**
   ```bash
-  ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo clippy -p app --all-targets -- -D warnings'
+  ssh fedora 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo clippy -p app --all-targets -- -D warnings'
   ```
 - **Done when:** Properties supports multi-selection, inline gradient & live filters, internal scrolling, and CS6 Swatch Matrix pickers everywhere.
 
@@ -212,7 +212,7 @@
   3. Place slice URL labels **below** each slice and elide to slice width (matching `elide_to_width` in Experiment `canvas.rs:14-33,1857-1882`) so slice labels never obscure button text underneath; ensure Showcase opens unselected and fits live `960×640` canvas on frame 1.
 - **Verify:**
   ```bash
-  ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo clippy -p app --all-targets -- -D warnings'
+  ssh fedora 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo clippy -p app --all-targets -- -D warnings'
   ```
 - **Done when:** `∞ Canvas` God View, fractional rulers, elided slice tabs, and first-frame fitting all work cleanly with unit tests.
 
@@ -233,6 +233,6 @@
   4. Rebuild fresh WASM (`xtask dist --web`), capture desktop + browser screenshots, open/verify PR merging `feat/phase1-visual-polish` -> `main` with 100% green CI, and **STOP for visual verification** before Phase 2.
 - **Verify:**
   ```bash
-  ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app --features native && cargo clippy --workspace --all-targets -- -D warnings && cargo run -p xtask -- panel-snapshot && cargo run -p xtask -- reachability && cargo run -p xtask -- aegis && cargo run -p xtask -- dist --web'
+  ssh fedora 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app --features native && cargo clippy --workspace --all-targets -- -D warnings && cargo run -p xtask -- panel-snapshot && cargo run -p xtask -- reachability && cargo run -p xtask -- aegis && cargo run -p xtask -- dist --web'
   ```
 - **Done when:** All Phase 1 P0 defects and core Experiment parity items pass full CI, visual checks, and merge cleanly to `main`.

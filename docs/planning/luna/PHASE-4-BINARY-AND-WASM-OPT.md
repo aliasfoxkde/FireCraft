@@ -10,7 +10,7 @@
 - **Files:** `docs/planning/generated/size-baseline.md` (new)
 - **Pre-check:**
   ```bash
-  ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; which trunk wasm-opt twiggy brotli gzip 2>&1 || true'
+  ssh fedora 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"; which trunk wasm-opt twiggy brotli gzip 2>&1 || true'
   ```
 - **Do:**
   1. Ensure `twiggy` and `brotli` are installed on the web build host (`cargo install twiggy --locked` if absent).
@@ -20,7 +20,7 @@
   5. Write `docs/planning/generated/size-baseline.md` with commit SHA, tool versions, byte table, and top 25 `twiggy` contributors.
 - **Verify:**
   ```bash
-  test -s /nas/Temp/repos/FireCraft/docs/planning/generated/size-baseline.md && grep -q "twiggy" /nas/Temp/repos/FireCraft/docs/planning/generated/size-baseline.md
+  test -s docs/planning/generated/size-baseline.md && grep -q "twiggy" docs/planning/generated/size-baseline.md
   ```
 - **Done when:** Baseline report is committed with exact byte counts and top 25 `twiggy` dominators.
 
@@ -31,7 +31,7 @@
 - **Files:** `xtask/src/dist.rs`, `web/index.html`, `docs/planning/generated/size-baseline.md`
 - **Pre-check:**
   ```bash
-  grep -n "CARGO_PROFILE_RELEASE\|data-wasm-opt" /nas/Temp/repos/FireCraft/xtask/src/dist.rs /nas/Temp/repos/FireCraft/web/index.html
+  grep -n "CARGO_PROFILE_RELEASE\|data-wasm-opt" xtask/src/dist.rs web/index.html
   ```
 - **Do:**
   1. Benchmark web-only env overrides in `xtask/src/dist.rs::stage_web()` (leaving native profile unchanged):
@@ -44,27 +44,27 @@
   3. Keep ONLY flags that reduce bytes AND pass `xtask dist --web` bridge smoke; append before/after row to `size-baseline.md`.
 - **Verify:**
   ```bash
-  ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /nas/Temp/repos/FireCraft-git && git pull --ff-only && cargo test -p xtask && cargo run -p xtask -- dist --web'
+  ssh fedora 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p xtask && cargo run -p xtask -- dist --web'
   ```
 - **Done when:** Stripped WASM shrinks measurably and passes `xtask dist --web` bridge smoke.
 
 ---
 
-### `L4.3` `[LUNA]` Build-Time Phosphor Icon Atlas / Font to Drop Runtime `resvg`/`usvg`/`fontdb` From WASM
+### `L4.3` `[LUNA]` Remove Runtime `resvg`/`usvg`/`fontdb` From WASM (Using Phase 2's Embedded `Phosphor-Regular.ttf`)
 
-- **Files:** `xtask/src/iconatlas.rs` (new) or `crates/app/build.rs`, `crates/app/src/shell/icons.rs`, `crates/app/Cargo.toml`, `docs/planning/generated/size-baseline.md`
+- **Files:** `crates/app/src/shell/icons.rs`, `crates/app/Cargo.toml`, `web/Cargo.toml`, `docs/planning/generated/size-baseline.md`
 - **Pre-check:**
   ```bash
-  grep -n "egui_extras" /nas/Temp/repos/FireCraft/crates/app/Cargo.toml /nas/Temp/repos/FireCraft/web/Cargo.toml
+  grep -n "egui_extras" crates/app/Cargo.toml web/Cargo.toml
   ```
 - **Do:**
   1. Read `L4.1`'s `twiggy` report to record exact bytes consumed by `resvg` + `usvg` + `tiny-skia` + `fontdb` + `egui_extras/svg`.
-  2. Add a deterministic build-time tool (`xtask icon-atlas`) that renders all `assets/icons-phosphor/*.svg` into a compact multi-DPI alpha/RGBA sprite atlas (e.g., 32×32 @ 2x crisp glyphs, PNG + compact UV table) OR subsetted Phosphor `.ttf` font.
-  3. Switch `crates/app/src/shell/icons.rs` to render Phosphor Icons from that lightweight atlas/font (tintable to any Dark/Light theme `Color32`), and remove `egui_extras/svg` from `crates/app/Cargo.toml`!
+  2. Confirm every GUI icon is now rendered via Phase 2's embedded `Phosphor-Regular.ttf` font (and optional subsetting if desired to drop unused codepoints from the 488 KB font).
+  3. Remove `egui_extras/svg` (and runtime `resvg`/`usvg`/`fontdb`) from `crates/app/Cargo.toml` / `web/Cargo.toml` while preserving crisp, tintable Dark/Light Phosphor icons at 1x/2x DPI!
   4. Verify `xtask icon-survey` stays green, visually inspect desktop & browser screenshots to confirm Phosphor Icons stay razor-sharp, and record exact multi-MB WASM savings in `size-baseline.md`!
 - **Verify:**
   ```bash
-  ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /nas/Temp/repos/FireCraft-git && git pull --ff-only && cargo test -p app && cargo test -p xtask && cargo run -p xtask -- dist --web'
+  ssh fedora 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo test -p xtask && cargo run -p xtask -- dist --web'
   ```
 - **Done when:** `resvg`/`usvg`/`fontdb` are absent from the WASM dependency tree, Phosphor Icons look identical at 1x/2x DPI, and WASM savings are recorded.
 
@@ -75,7 +75,7 @@
 - **Files:** `crates/text/src/lib.rs`, `web/Cargo.toml`, `crates/app/Cargo.toml`, `docs/planning/generated/size-baseline.md`
 - **Pre-check:**
   ```bash
-  ls -lh /nas/Temp/repos/FireCraft/crates/text/assets/ && grep -n "default_fonts" /nas/Temp/repos/FireCraft/crates/app/Cargo.toml /nas/Temp/repos/FireCraft/web/Cargo.toml
+  ls -lh crates/text/assets/ && grep -n "default_fonts" crates/app/Cargo.toml web/Cargo.toml
   ```
 - **Do:**
   1. Check `twiggy` bytes for `epaint_default_fonts` vs `crates/text/assets/LiberationSans-{Regular,Bold}.ttf` (824 KB).
@@ -83,7 +83,7 @@
   3. Record before/after bytes in `size-baseline.md`. If visual quality degrades, keep the sharper font set and document why.
 - **Verify:**
   ```bash
-  ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /nas/Temp/repos/FireCraft-git && git pull --ff-only && cargo test -p text -p app && cargo run -p xtask -- dist --web'
+  ssh fedora 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p text -p app && cargo run -p xtask -- dist --web'
   ```
 - **Done when:** Font duplication is either eliminated cleanly or documented with exact byte cost and visual proof.
 
@@ -102,7 +102,7 @@
   3. Verify `xtask dist --web` bridge smoke passes on the minified JS+HTML and record raw/`.gz`/`.br` savings in `size-baseline.md`.
 - **Verify:**
   ```bash
-  ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /nas/Temp/repos/FireCraft-git && git pull --ff-only && cargo test -p xtask && cargo run -p xtask -- dist --web'
+  ssh fedora 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p xtask && cargo run -p xtask -- dist --web'
   ```
 - **Done when:** Staged JS glue is minified/mangled cleanly and headless Chromium bridge smoke passes.
 
@@ -113,7 +113,7 @@
 - **Files:** `xtask/Cargo.toml`, `xtask/src/dist.rs`, `web/_headers` (new), `docs/planning/generated/size-baseline.md`
 - **Pre-check:**
   ```bash
-  grep -n "is_compressible_web_asset\|flate2" /nas/Temp/repos/FireCraft/xtask/src/dist.rs /nas/Temp/repos/FireCraft/xtask/Cargo.toml
+  grep -n "is_compressible_web_asset\|flate2" xtask/src/dist.rs xtask/Cargo.toml
   ```
 - **Do:**
   1. Add pure-Rust `brotli` crate (or fail-closed pinned `brotli` check) to `xtask` so `stage_web()` deterministically writes BOTH `<file>.gz` (level 9) AND `<file>.br` (quality 11) for every `.wasm`, `.js`, and `.html` file.
@@ -122,7 +122,7 @@
   4. Record final `.br` and `.gz` transfer bytes in `size-baseline.md`.
 - **Verify:**
   ```bash
-  ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /nas/Temp/repos/FireCraft-git && git pull --ff-only && cargo test -p xtask && cargo run -p xtask -- dist --web && ls -lh dist/web/*.wasm*'
+  ssh fedora 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p xtask && cargo run -p xtask -- dist --web && ls -lh dist/web/*.wasm*'
   ```
 - **Done when:** Every compressible staged web file ships verified `.gz` and `.br` sidecars and `size-baseline.md` records exact transfer savings.
 
@@ -141,7 +141,7 @@
   3. Record native before/after byte sizes in `docs/planning/generated/size-baseline.md`.
 - **Verify:**
   ```bash
-  ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /nas/Temp/repos/FireCraft-git && git pull --ff-only && cargo run -p xtask -- aegis'
+  ssh fedora 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo run -p xtask -- aegis'
   ```
 - **Done when:** Native release strip measurements are documented with zero regression.
 

@@ -20,7 +20,7 @@
   4. Add unit tests for viewport clamping, 1-click collapse chevron hit-testing, and tab overflow.
 - **Verify:**
   ```bash
-  ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app panel_windows && cargo clippy -p app --all-targets -- -D warnings'
+  ssh fedora 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app panel_windows && cargo clippy -p app --all-targets -- -D warnings'
   ```
 - **Done when:** Floating panels render with translucent drag ghosts, 1-click collapse chevrons, resize splitters, and `»` tab overflow.
 
@@ -40,7 +40,7 @@
   3. Add all 6 CS6 workspace presets: `Expanded Mode`, `CS6 Dual-Column` (`RightOuter` + `RightInner`), `All Panels Floating`, `Iconic Mode` (36 px strip + icon-anchored flyouts), `Iconic Mode With Panel Names` (94 px), and `Netbook Mode`.
 - **Verify:**
   ```bash
-  ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo clippy -p app --all-targets -- -D warnings && cargo run -p xtask -- panel-snapshot'
+  ssh fedora 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo clippy -p app --all-targets -- -D warnings && cargo run -p xtask -- panel-snapshot'
   ```
 - **Done when:** Magnetic edge snapping, vertical stacking, floating Tools/Panels grip bars, and all 6 presets work with `panels.snapshot` intact.
 
@@ -60,7 +60,7 @@
   4. Add unit tests verifying default-off opt-ins, empty-summary guard, and WASM compilation.
 - **Verify:**
   ```bash
-  ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo clippy -p app --all-targets -- -D warnings && cargo check --target wasm32-unknown-unknown -p firecraft-web && cargo run -p xtask -- aegis'
+  ssh fedora 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo clippy -p app --all-targets -- -D warnings && cargo check --target wasm32-unknown-unknown -p firecraft-web && cargo run -p xtask -- aegis'
   ```
 - **Done when:** Feedback modal opens cleanly on native & WASM, previews scrubbed payload, and opens the prefilled GitHub URL.
 
@@ -87,7 +87,7 @@
   3. Add unit tests proving user-language aliases, `find:` object jump, `replace:a->b`, and 100% exact catalog ID reachability.
 - **Verify:**
   ```bash
-  ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo clippy -p app --all-targets -- -D warnings && cargo run -p xtask -- reachability'
+  ssh fedora 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo clippy -p app --all-targets -- -D warnings && cargo run -p xtask -- reachability'
   ```
 - **Done when:** `Ctrl+K` / `Ctrl+P` searches commands, aliases, panels, filters, widgets, canvas objects, and inline replace while preserving 257/257 reachability.
 
@@ -106,7 +106,7 @@
   3. Add unit tests for deduplication, MRU ordering, cap trimming, pin preservation across `clear_recent`, and corrupted JSON graceful fallback.
 - **Verify:**
   ```bash
-  ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app recent && cargo clippy -p app --all-targets -- -D warnings && cargo check --target wasm32-unknown-unknown -p firecraft-web'
+  ssh fedora 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app recent && cargo clippy -p app --all-targets -- -D warnings && cargo check --target wasm32-unknown-unknown -p firecraft-web'
   ```
 - **Done when:** `recent.rs` passes all unit tests on native and compiles clean on `wasm32`.
 
@@ -127,7 +127,7 @@
   4. Add CLI argument parsing unit tests.
 - **Verify:**
   ```bash
-  ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo clippy -p app --all-targets -- -D warnings && cargo run -p xtask -- aegis'
+  ssh fedora 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo clippy -p app --all-targets -- -D warnings && cargo run -p xtask -- aegis'
   ```
 - **Done when:** `Open Recent`, Welcome Screen, `File` browser/print commands, and deterministic CLI flags all work end-to-end with tests.
 
@@ -148,7 +148,7 @@
   4. Add unit tests covering bulk-close queue order, dirty tab prompt pause/resume, and `should_intercept_close()` / `allow_close` gate.
 - **Verify:**
   ```bash
-  ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app --features native && cargo check --target wasm32-unknown-unknown -p firecraft-web && cargo clippy -p app --all-targets -- -D warnings'
+  ssh fedora 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app --features native && cargo check --target wasm32-unknown-unknown -p firecraft-web && cargo clippy -p app --all-targets -- -D warnings'
   ```
 - **Done when:** Multi-monitor floating canvas windows work natively, WASM stays clean, and dirty tab/quit close flows never silently discard work or loop.
 
@@ -169,7 +169,7 @@
   4. Add optional animated semi-transparent Startup Splash (`--splash` / initial desktop launch, auto-skipped on `--no-welcome` & WASM embed, clean-room FireCraft Studio branding — zero Adobe trademarks) and upgrade `About FireCraft` with 64 px flame logo, links, and striped Workflow Shortcuts grid.
 - **Verify:**
   ```bash
-  ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo clippy -p app --all-targets -- -D warnings && cargo check --target wasm32-unknown-unknown -p firecraft-web && cargo run -p xtask -- aegis'
+  ssh fedora 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo clippy -p app --all-targets -- -D warnings && cargo check --target wasm32-unknown-unknown -p firecraft-web && cargo run -p xtask -- aegis'
   ```
 - **Done when:** Zero dead dialog stub fields remain in `shell/mod.rs`, 4-mode Find & Replace works across all pages, and all modals share crisp CS6 visual grammar.
 
@@ -189,7 +189,7 @@
   3. Create `crates/app/tests/gui_harness.rs` driving real headless `Shell` frames at `1360×860` and `960×640`: click-level collapse chevron test, `Alt+` menu & `Esc` test, panel float/snap/stack test, 4-mode Find/Replace test, and a **500-object `@ 1920×1080` frame-time budget regression test**, plus `scripts/gui-suite.sh` for 6-state Xvfb capture.
 - **Verify:**
   ```bash
-  ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app --features native && cargo clippy -p app --all-targets -- -D warnings && cargo run -p xtask -- aegis'
+  ssh fedora 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app --features native && cargo clippy -p app --all-targets -- -D warnings && cargo run -p xtask -- aegis'
   ```
 - **Done when:** `Intelligence` tab, MCP Console, and headless GUI click/frame-budget harness all pass cleanly with zero regressions.
 

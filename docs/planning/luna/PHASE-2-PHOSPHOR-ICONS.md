@@ -31,7 +31,7 @@
 - **Experiment Ref (read-only):** `app/assets/fonts/{Phosphor-Regular.ttf,LICENSE-MIT}`, `app/src/icons.rs:7-21`, `app/src/icons/phosphor.rs`, `app/src/icons/tests.rs`
 - **Pre-check:**
   ```bash
-  ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && cargo run -p xtask -- icon-survey'
+  ssh fedora 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && cargo run -p xtask -- icon-survey'
   ```
 - **Do:**
   1. Bundle MIT `Phosphor-Regular.ttf` + `LICENSE-phosphor-mit.txt` under `assets/fonts/` and register `"FireCraft Phosphor"` in `egui::FontDefinitions` via `icons::install_phosphor_font(&ctx)` at both native (`crates/app/src/main.rs`) and WASM (`web/src/main.rs`) startup (plus `Shell` tests).
@@ -40,7 +40,7 @@
   4. Add unit tests verifying every `Tool` and `UiIcon` resolves to a valid non-empty Phosphor glyph (matching Experiment `app/src/icons/tests.rs`).
 - **Verify:**
   ```bash
-  ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app icons && cargo test -p xtask iconsurvey && cargo run -p xtask -- icon-survey && cargo check --target wasm32-unknown-unknown -p firecraft-web && cargo run -p xtask -- aegis'
+  ssh fedora 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app icons && cargo test -p xtask iconsurvey && cargo run -p xtask -- icon-survey && cargo check --target wasm32-unknown-unknown -p firecraft-web && cargo run -p xtask -- aegis'
   ```
 - **Done when:** Embedded Phosphor font installs cleanly on desktop & WASM, all lookup tests pass, and `xtask icon-survey` + `aegis` are green.
 
@@ -59,7 +59,7 @@
   3. Verify active-tool highlight tint works cleanly in both Dark and Light themes.
 - **Verify:**
   ```bash
-  ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo clippy -p app --all-targets -- -D warnings'
+  ssh fedora 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo clippy -p app --all-targets -- -D warnings'
   ```
 - **Done when:** Left Tools rail, tool flyouts, and Tools footer render unified crisp Phosphor icons with zero mixed styles.
 
@@ -77,7 +77,7 @@
   2. Ensure uniform 14–16 px optical sizing and theme-aware hover/active/disabled tinting.
 - **Verify:**
   ```bash
-  ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo clippy -p app --all-targets -- -D warnings'
+  ssh fedora 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo clippy -p app --all-targets -- -D warnings'
   ```
 - **Done when:** Top chrome, document tab view bar, and canvas footer use 100% Phosphor icons.
 
@@ -96,7 +96,7 @@
   3. Confirm `xtask panel-snapshot` and `xtask reachability` remain 100% green (`257/257`).
 - **Verify:**
   ```bash
-  ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo clippy -p app --all-targets -- -D warnings && cargo run -p xtask -- panel-snapshot && cargo run -p xtask -- reachability && cargo run -p xtask -- aegis'
+  ssh fedora 'export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo clippy -p app --all-targets -- -D warnings && cargo run -p xtask -- panel-snapshot && cargo run -p xtask -- reachability && cargo run -p xtask -- aegis'
   ```
 - **Done when:** Zero mixed icon families remain across the entire GUI shell.
 
