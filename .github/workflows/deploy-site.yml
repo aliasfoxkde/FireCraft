@@ -1,6 +1,12 @@
 name: Deploy FireCraft marketing site
 
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "site/**"
+      - "tests/site-release-loader.test.mjs"
+      - ".github/workflows/deploy-site.yml"
   push:
     branches: [main]
     # The trigger is the deployed content, not this file. The workflow's own
@@ -17,12 +23,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: firecraft-site-production
+  group: firecraft-site-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'production' }}
   cancel-in-progress: true
 
 jobs:
-  deploy:
-    name: Validate and deploy Cloudflare Pages
+  validate:
+    name: Validate marketing site
     runs-on: ubuntu-24.04
     steps:
       - name: Check out source
@@ -32,10 +38,22 @@ jobs:
           test -s site/index.html
           test -s site/styles.css
           test -s site/app.js
+          test -s site/extensions.html
+          test -s site/extensions.css
           test -s site/assets/firecraft-mark.png
           grep -q 'name="description"' site/index.html
           grep -q 'prefers-reduced-motion' site/styles.css
           grep -q 'loadRelease' site/app.js
+          node --test tests/site-release-loader.test.mjs
+
+  deploy:
+    name: Deploy Cloudflare Pages
+    if: github.event_name != 'pull_request'
+    needs: validate
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3.15.0
         with:
