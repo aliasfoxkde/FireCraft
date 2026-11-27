@@ -1,6 +1,13 @@
-const ALLOWED_DOWNLOAD_PREFIX = "https://github.com/aliasfoxkde/FireCraft/releases/download/";
-const FALLBACK_URL = "https://github.com/aliasfoxkde/FireCraft/releases/latest";
-const RELEASE_ENDPOINT = "https://api.github.com/repos/aliasfoxkde/FireCraft/releases/latest";
+const REPOSITORY = "https://github.com/aliasfoxkde/FireCraft-CraftAnything-Experiment";
+const ALLOWED_DOWNLOAD_PREFIX = `${REPOSITORY}/releases/download/`;
+const FALLBACK_URL = `${REPOSITORY}/releases/latest`;
+const RELEASE_ENDPOINT = "https://api.github.com/repos/aliasfoxkde/FireCraft-CraftAnything-Experiment/releases/latest";
+const THEMES = ["system", "dark", "light"];
+
+export function nextTheme(theme) {
+  const index = THEMES.indexOf(theme);
+  return THEMES[(index + 1) % THEMES.length];
+}
 
 export function isTrustedDownloadUrl(url) {
   return typeof url === "string" && url.startsWith(ALLOWED_DOWNLOAD_PREFIX);
@@ -27,6 +34,45 @@ export function selectSafeAssets(release) {
 
 function initSite() {
   if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  const themeToggle = document.querySelector("[data-theme-toggle]");
+  let theme = "system";
+  try {
+    const saved = localStorage.getItem("firecraft-site-theme");
+    if (THEMES.includes(saved)) theme = saved;
+  } catch {
+    // Theme selection still works for this page when storage is unavailable.
+  }
+  function updateTheme() {
+    root.dataset.theme = theme;
+    const systemTheme = window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark";
+    root.dataset.colorScheme = theme === "system" ? systemTheme : theme;
+    if (themeToggle) {
+      const next = nextTheme(theme);
+      themeToggle.textContent = `Theme: ${theme === "system" ? "Auto" : theme[0].toUpperCase() + theme.slice(1)}`;
+      themeToggle.setAttribute("aria-label", `Theme mode ${theme}. Activate to switch to ${next}.`);
+      themeToggle.setAttribute("aria-pressed", String(theme !== "system"));
+    }
+  }
+  updateTheme();
+  window.matchMedia?.("(prefers-color-scheme: light)").addEventListener("change", () => {
+    if (theme === "system") updateTheme();
+  });
+  themeToggle?.addEventListener("click", () => {
+    theme = nextTheme(theme);
+    updateTheme();
+    try {
+      localStorage.setItem("firecraft-site-theme", theme);
+    } catch {
+      // Keep the selected mode for the current page session.
+    }
+  });
+  const hero = document.querySelector(".hero");
+  hero?.addEventListener("pointermove", (event) => {
+    const bounds = hero.getBoundingClientRect();
+    hero.style.setProperty("--pointer-x", `${((event.clientX - bounds.left) / bounds.width) * 100}%`);
+    hero.style.setProperty("--pointer-y", `${((event.clientY - bounds.top) / bounds.height) * 100}%`);
+  }, { passive: true });
   const navToggle = document.querySelector(".nav-toggle");
   const nav = document.querySelector(".nav");
   navToggle?.addEventListener("click", () => {
