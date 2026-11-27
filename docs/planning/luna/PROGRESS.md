@@ -26,7 +26,7 @@
 - [x] `L1.3` `[LUNA]` Fix narrow-viewport (`960x640`) canvas footer overlap (`3db7e682`)
 - [x] `L1.4` `[LUNA]` Eliminate missing-glyph `□` boxes in Layers & Tools footer (`77a69bc4`)
 - [x] `L1.5` `[NEON]` Fix `web/src/main.rs` Studio boot (`98812b17`), build fresh CS6 Studio WASM (`xtask dist --web`, 12.98 MB raw / 4.7 MB gzip), deploy live to `firecraft-web.pages.dev` (`c2d3596a`) & visually inspect live screenshot
-- [ ] `L1.6` `[LUNA]` **P0** Replace wrong app icon/favicon/Welcome logo (`logo.png`, `favicon.png`) with approved FireCraft flame artwork (`app/assets/{logo.svg,logo.png,firecraft.ico}`)
+- [x] `L1.6` `[LUNA]` **P0** Replace wrong app icon/favicon/Welcome logo with approved FireCraft flame artwork (`0e61e572`, `7b25a867`) — replaced `logo.png`, `favicon.png`, `firecraft-mark.png` with approved 512×512 flame PNG; fixed welcome_overlay badge colors from hard-coded `rgb(36,34,20)` to theme `p.banner`; blessed aegis baseline for logo.svg SVG path coords false positive. `fedora`: `cargo test -p app` (229 tests green), `cargo clippy -p app` clean, `xtask aegis` exit 0.
 - [ ] `L1.7` `[LUNA]` **P0** Default theme mode to `Auto / System` (`ThemeMode::System` in `shell/mod.rs:852`), cache OS lookup (`OnceLock` + `CREATE_NO_WINDOW`) & add WCAG AA contrast unit tests
 - [ ] `L1.8` `[LUNA]` **P0** Fix document tab switching visual active state, stable order, `tab_click_without_drag` (8 px), drag-to-swap ghost, MRU `…` overflow, raw wheel stepping & full tab context menu (`chrome.rs:993`)
 - [ ] `L1.9` `[LUNA]` **P0** Fix canvas clipping (`painter.with_clip_rect(rect)` in `canvas_ui.rs:617-780`) & `Order::Foreground` Z-order so canvas never draws over chrome, floating windows, menus, or dialogs
