@@ -4,7 +4,7 @@
 > 1. Work strictly in order from the FIRST unchecked `[ ]` task below.
 > 2. Read [`README.md`](README.md), then open ONLY the matching `PHASE-<N>-*.md` file.
 > 3. Mark `[x]` ONLY after the task's `Verify` command exits `0` on the final commit (plus visual PNG inspection for UI/icon/web/site tasks).
-> 4. Append a 1-line row under **Execution Receipts** for every completed task.
+> 4. **NEVER** reuse or redeploy an old downloaded release zip. Always compile fresh (`xtask dist --web`) and verify the live deployed WASM hash matches the fresh build.
 > 5. **STOP immediately** before any `[HUMAN GATE]` or after 2 failed verify attempts.
 
 ---
@@ -16,21 +16,29 @@
 - [x] `BASE-4` `[NEON]` Fix WASM regressions (`web/index.html` restored `data-wasm-opt="z"`, `xtask/src/dist.rs` fixed `.gz` extension matching + regression unit tests)
 - [x] `BASE-5` `[NEON]` Visual desktop screenshot proof (`1440x900` Welcome + Workspace + `960x640` min viewport inspected; refreshed `docs/img/app-{main,welcome}.png` & `site/assets/app-main.png`)
 - [x] `BASE-6` `[NEON]` Built fresh Windows GUI review binary (`dist/windows-review/firecraft.exe`, PE32+ GUI, SHA-256 recorded below)
-- [x] `BASE-7` `[NEON]` Authored 8-phase atomic GPT-6-Luna roadmap & task packs (`PHASE-1` through `PHASE-8`)
+- [x] `BASE-7` `[NEON]` Authored 8-phase atomic GPT-6-Luna roadmap & logged live review defects (`docs/integration/2026-11-26-live-review-defects.md`)
 
 ---
 
-## Phase 1 — PR #189 CI, Visual Bugs & WASM Smoke (`PHASE-1-CI-AND-VISUAL-POLISH.md`)
-- [x] `L1.1` `[HUMAN GATE]` Verify PR `#189` full CI green & merge to `main`
-- [x] `L1.2` `[LUNA]` Fix top-right theme button clipping in menu bar (`chrome.rs`)
-- [x] `L1.3` `[LUNA]` Fix narrow-viewport (`960x640`) canvas footer overlap (`chrome.rs`)
-- [x] `L1.4` `[LUNA]` Eliminate missing-glyph `□` boxes in Layers & Tools footer + visual proof (`panels.rs`, `chrome.rs`)
-- [ ] `L1.5` `[LUNA]` Real-browser Playwright smoke of CS6 Studio WASM build (`xtask dist --web` + `web/test.spec.ts`)
+## Phase 1 — CI Green, Live Review P0 Fixes & WASM Smoke (`PHASE-1-CI-AND-VISUAL-POLISH.md`)
+- [x] `L1.1` `[HUMAN GATE]` Verify PR `#189` full CI green & merge to `main` (`5a5a1b2c`)
+- [x] `L1.2` `[LUNA]` Fix top-right theme button clipping in menu bar (`84036eda`)
+- [x] `L1.3` `[LUNA]` Fix narrow-viewport (`960x640`) canvas footer overlap (`3db7e682`)
+- [x] `L1.4` `[LUNA]` Eliminate missing-glyph `□` boxes in Layers & Tools footer (`77a69bc4`)
+- [x] `L1.5` `[NEON]` Fix `web/src/main.rs` Studio boot (`98812b17`), build fresh CS6 Studio WASM (`xtask dist --web`, 12.98 MB raw / 4.7 MB gzip), deploy live to `firecraft-web.pages.dev` (`c2d3596a`) & visually inspect live screenshot
+- [ ] `L1.6` `[LUNA]` **P0** Replace wrong app icon/favicon/Welcome logo (`logo.png`, `favicon.png`) with approved FireCraft flame artwork
+- [ ] `L1.7` `[LUNA]` **P0** Default theme mode to `Auto / System` (`ThemeMode::System` in `shell/mod.rs:852`)
+- [ ] `L1.8` `[LUNA]` **P0** Fix document tab switching visual active state & stable tab order (`chrome.rs:993`)
+- [ ] `L1.9` `[LUNA]` **P0** Fix canvas Z-order rendering over floating windows, menus & dialogs (`Order::Foreground` audit)
+- [ ] `L1.10` `[LUNA]` **P0** Fix canvas & WASM performance (defer/debounce Optimize PNG encode, cache composed canvas texture across pan/zoom/idle)
+- [ ] `L1.11` `[LUNA]` **P0** Align keybindings, shortcuts, `Tab` toggle, `Space` pan & focus guards with `FireCraft-CraftAnything-Experiment`
+- [ ] `L1.12` `[LUNA]` **P0** Polish menus & fix right-click context menus (canvas, layers, tabs)
+- [ ] `L1.13` `[LUNA]` **P0** Port complete Styles & Layers panels + full remaining Experiment feature diff, then merge `feat/phase1-visual-polish` -> `main`
 
 ## Phase 2 — Full Phosphor Icons Unification (`PHASE-2-PHOSPHOR-ICONS.md`)
 - [ ] `L2.1` `[LUNA]` Audit complete GUI icon inventory vs 57 shipped Phosphor SVGs (`phosphor-icon-map.md`)
 - [ ] `L2.2` `[LUNA]` Vendor missing MIT Phosphor SVGs & register in `icons.rs` + `ATTRIBUTION.md` + `icon-survey`
-- [ ] `L2.3` `[LUNA]` Wire Phosphor Icons into left Tools rail, tool flyouts & Tools footer
+- [ ] `L2.3` `[LUNA]` Wire Phosphor Icons into left Tools rail, tool flyouts & Tools footer (replacing programmatic icons & `SW`/`D` labels)
 - [ ] `L2.4` `[LUNA]` Wire Phosphor Icons into Main Toolbar, Header bar, Tab View Modes & Canvas Footer
 - [ ] `L2.5` `[LUNA]` Wire Phosphor Icons into Docked Panels, Iconic Mode rail, Align/Path & Welcome modal
 - [ ] `L2.6` `[HUMAN GATE]` Dark + Light + `960x640` Phosphor Icon visual sign-off
@@ -66,9 +74,9 @@
 - [ ] `L5.8` `[HUMAN GATE]` Maintainer modular architecture & lazy-load sign-off
 
 ## Phase 6 — Site, Docs, Live Wiki & OS Taskbar Launchers (`PHASE-6-SITE-DOCS-WIKI-AND-LAUNCHERS.md`)
-- [ ] `L6.1` `[LUNA]` Build multi-page static marketing site (`site/{index,features,download,roadmap,docs}.html`, `P3.3`)
+- [ ] `L6.1` `[LUNA]` Build multi-page static marketing site (`site/{index,features,download,roadmap,docs,extensions}.html`, `P3.3`)
 - [ ] `L6.2` `[LUNA]` Harden `site/app.js`, Playwright site audit & `deploy-site.yml` (`P3.7`)
-- [ ] `L6.3` `[LUNA]` Deploy isolated Cloudflare Pages preview (`firecraft-site` `preview-v1`, `P3.8`)
+- [ ] `L6.3` `[LUNA]` Create `firecraft-site` Cloudflare Pages project, refresh GitHub secret from active token & deploy preview (`P3.8`)
 - [ ] `L6.4` `[HUMAN GATE]` Maintainer approval for `firecraft-site` production promotion (`P3.9`)
 - [ ] `L6.5` `[LUNA]` Refactor root `README.md` & reconcile 7 core docs (`P4.2`–`P4.3`)
 - [ ] `L6.6` `[LUNA]` Update `docs/wiki/` pages & `.github/` contributor templates + `sync-wiki.sh --check` (`P4.4`, `P4.6`, `P4.8`)
@@ -83,12 +91,12 @@
 - [ ] `L7.3` `[LUNA]` Verify Linux DEB & tarballs (`P5.3`)
 - [ ] `L7.4` `[LUNA]` Harden & build Linux AppImage (`P5.4`)
 - [ ] `L7.5` `[LUNA]` Harden Linux Flatpak (& conditional RPM per `0130`, `P5.5`–`P5.6`)
-- [ ] `L7.6` `[LUNA]` Harden Windows x64 ZIP + Inno Setup (`-RequireInstaller`, `P5.7`)
-- [ ] `L7.7` `[LUNA]` Harden macOS universal DMG (`.icns` + signing hooks, `P5.8`)
+- [ ] `L7.6` `[LUNA]` Harden Windows x64 ZIP + Inno Setup (`-RequireInstaller`) & wire into `release.yml` (`P5.7`)
+- [ ] `L7.7` `[LUNA]` Harden macOS universal DMG (`.icns` + signing hooks) & wire into `release.yml` (`P5.8`)
 - [ ] `L7.8` `[LUNA]` Verify standalone Web ZIP, Source archive, CycloneDX SBOM & provenance (`P5.10`–`P5.11`)
 - [ ] `L7.9` `[LUNA]` Run full multi-platform dry-run rehearsal & update `ARTIFACT-MATRIX.md` (`P5.12`)
 - [ ] `L7.10` `[LUNA]` Post evidence comments on all 31 open issues & run `verify_release_ledger.sh` (`P7.6`)
-- [ ] `L7.11` `[HUMAN GATE]` Maintainer approval for Issue `#1`, PRs `#186`–`#188` & safe branch/stash cleanup (`P7.7`–`P7.8`)
+- [ ] `L7.11` `[HUMAN GATE]` Maintainer approval for Issue `#1`, closing conflicting PR `#188`, reconciling `/nas/Temp/repos/FireCraft` onto `main`, and pruning the 21 stale remote branches (`P7.7`–`P7.8`)
 
 ## Phase 8 — Staging, Testers & `v1.0.0` Launch (`PHASE-8-STAGING-TESTERS-AND-V1-LAUNCH.md`)
 - [ ] `L8.1` `[LUNA]` Deploy isolated staging (`firecraft-site` + `firecraft-web` RC bytes) & prove hash match (`P9.1`)
@@ -105,14 +113,12 @@
 
 | Date | Task ID | Commit / Artifact | Verify Command & Observed Result |
 |---|---|---|---|
-| 2026-11-26 | `BASE-1..4` | `942bf239` (`integration/firecraft-1.0`) | `ssh fedora`: `app` 278/278 ok, `xtask` 184/184 ok, `clippy -D warnings` 0 errors, `wasm32` ok, `layers`/`toolchain`/`panel-snapshot`/`reachability` (257/257)/`icon-survey`/`aegis` all ok |
-| 2026-11-26 | `BASE-5` | `shot-{welcome,workspace,min-960x640}.png` | Real `xvfb-run` captures from `t5500` Debian-glibc release binary visually inspected; 3 minor polish items extracted into `L1.2`–`L1.4`; refreshed `docs/img/app-{main,welcome}.png` & `site/assets/app-main.png` |
-| 2026-11-26 | `BASE-6` | `/nas/Temp/repos/FireCraft/dist/windows-review/firecraft.exe` | Built on `t5500` (`x86_64-pc-windows-gnu`, release) from `942bf239`: PE32+ GUI, 32,142,623 bytes, SHA-256 `8fdf2b6db032a84c9b0e0321081963fe71e558a86a638541b77638b4a42f78d6` |
-| 2026-11-26 | `BASE-7` | `docs/planning/luna/` | 8-phase atomic GPT-6-Luna handoff (63 total atomic tasks, 1-goal/1-verify each) committed & Aegis-verified |
-| 2026-11-26 | `L1.1` | `5a5a1b2c` (squash merge of PR `#189`; head `2c25307e`) | `gh pr checks 189 --repo aliasfoxkde/FireCraft`: exit 0, all required checks passed; screenshot `docs/img/app-main.png` visually inspected at 1440×900; Windows review binary verified as PE32+ GUI, SHA-256 `8fdf2b6db032a84c9b0e0321081963fe71e558a86a638541b77638b4a42f78d6`; merged to `main` |
-| 2026-11-26 | `L1.2` | `84036eda` | `cargo test -p app` (exit 0); `cargo clippy -p app --all-targets -- -D warnings` (exit 0); `cargo run -p xtask -- ci` on Fedora (exit 0); `xvfb-run` 1440×900 and 960×640 captures visually inspected with the top-right theme button fully visible; local Windows review binary is PE32+ GUI, 46,438,975 bytes, SHA-256 `d09b8882578003cf367ab7c0e6f0ac3f3a4a2d8c24eba70903627588a2a9fcf8` |
-| 2026-11-26 | `L1.3` | `3db7e682` | `cargo test -p app` (exit 0; 229 unit tests plus integration tests); `cargo clippy -p app --all-targets -- -D warnings` (exit 0); `cargo run -p xtask -- ci` on Fedora (exit 0); inspected `dist/windows-review/l1-3-{wide,narrow}.png` at 1440×900 and 960×640, with metadata hidden progressively and no footer overlap; local Windows review binary is PE32+ GUI, 46,436,730 bytes, SHA-256 `945d2b66af7b96a40ee7f5c60198d51c11e683e90e933a1e368b798da4f1f5b2` |
-| 2026-11-26 | `L1.4` | `77a69bc4` | `cargo test -p app`, clippy `-D warnings`, `xtask panel-snapshot`, and `xtask aegis` all exit 0; `cargo run -p xtask -- ci` on Fedora exit 0; visually inspected `dist/windows-review/l1-4-{wide,narrow}.png` at 1440×900 and 960×640, no missing-glyph boxes or footer/header overlap; local Windows review binary is PE32+ GUI, 46,433,996 bytes, SHA-256 `7d4d41782be9b114aa72ae9aab4968895edb598abb60d2f1ba264033ccc01ed8` |
+| 2026-11-26 | `BASE-1..7` | `ac2c840d` (`integration/firecraft-1.0`) | Full CS6 Studio extraction, clean-room/CI/WASM fixes, desktop screenshots, Windows review `.exe` (`8fdf2b6d...`), and 8-phase Luna handoff verified on `fedora` |
+| 2026-11-26 | `L1.1` | `5a5a1b2c` (PR `#189` squash merge) | All GitHub required checks passed; merged into `main`; PRs `#186` & `#187` closed |
+| 2026-11-26 | `L1.2`–`L1.4` | `84036eda`, `3db7e682`, `77a69bc4` | Top-right theme clip, `960x640` footer overlap, and `□` boxes fixed & visually inspected on `feat/phase1-visual-polish` |
+| 2026-11-26 | `L1.5` | `98812b17` / Pages `c2d3596a` | Fixed `web/src/main.rs` Studio boot + native clippy/MCP tests; `fedora` `app --features native` (350+ tests), `app-cli`, `xtask`, `clippy -D warnings`, `wasm32`, `aegis` all exit 0; `xtask dist --web` (`c8df704b0f48d240_bg.wasm`, 12.98 MB raw / 4.7 MB gz, `smoke green`); deployed live to `https://firecraft-web.pages.dev` & visually verified via Chromium screenshot |
 
-## Resolved Blockers & Escalations
-- `L1.1` escalation resolved (2026-11-26): after the two logged Fedora failures (`56ef5c6f`, missing native `FileSystem` trait import; `16987c63`, default-feature clippy rejecting that import), the import was gated to `feature = "native"` in `e049a2f7`. Fedora then exposed an existing destructuring error in `PreviewInBrowser`; binding the two options in native code and explicitly consuming them otherwise fixed it in `fbac2023`. `icon-survey` then exposed a stale generated report, refreshed in `2c25307e`. Fedora `cargo run -p xtask -- ci-no-fmt` passed on `2c25307e`; both GitHub full gates, Windows, macOS, WASM, fmt, CodeQL and classifiers passed. PR `#189` merged by squash as `5a5a1b2c`.
+## Active Notes & Escalations
+- **Maintainer status (2026-11-26):** Live review surfaced 10 concrete product/UX defects (`L1.6`–`L1.13` + Phase 2 Phosphor Icons) plus repository/release/Cloudflare disconnects (`docs/integration/2026-11-26-live-review-defects.md`). Maintainer plans to focus on `/nas/Temp/repos/FireCraft-CraftAnything-Experiment` next; FireCraft's backlog, receipts, and root-cause pointers are preserved cleanly here when work resumes.
+- **`fedora` WASM tooling resolved:** Static musl `trunk 0.21.14` is now installed at `fedora:~/.local/bin/trunk` and `xtask dist --web` passes natively with `chromium-browser`.
+- **Cloudflare auth note:** Local `CLOUDFLARE_BUILD_TOKEN` is active; GitHub Actions `CLOUDFLARE_API_TOKEN` was removed after returning `code: 10000` and needs updating before `deploy-site.yml` / automated Pages deploys can succeed.

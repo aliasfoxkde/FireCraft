@@ -31,6 +31,8 @@ Work on **1 task card at a time** (at most 2–3 consecutive `[LUNA]` tasks in t
 ## 2. Non-Negotiable Hard Rules (Anti-Failure Guardrails)
 
 - **No false `[x]`:** Never mark a task complete without exit code `0` on the final commit.
+- **No stale/cached artifacts (CRITICAL):** NEVER unzip, copy, or redeploy an older GitHub Release archive (e.g. `v0.2.5`) to Cloudflare Pages! Always run `xtask dist --web` fresh from HEAD and verify `curl -sSL https://firecraft-web.pages.dev/index.html` matches the newly generated `.wasm` hash AND capture + inspect a real live browser screenshot.
+- **Single branch discipline:** Before editing any file, run `git branch --show-current` and verify you are on the active branch (never edit closed `feat/experiment-merge`).
 - **No self-approving `[HUMAN GATE]`:** Always stop and report the exact evidence bundle to the maintainer.
 - **No `rsync` / SSH code sync:** Always `git commit` -> `git push gitforge` (and `origin` when verified) -> `git pull --ff-only` on `fedora` / `t5500`.
 - **No heavy Cargo builds on local `SWARMONE`:** Local host enforces a build lease. Run all Cargo tests, clippy, `xtask`, Linux builds, and WASM builds on `ssh fedora`; run Windows `.exe` builds on `ssh t5500`.
