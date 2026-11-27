@@ -133,10 +133,9 @@ impl Shell {
                 if close_resp.on_hover_text("Close Welcome Screen").clicked() {
                     close_welcome = true;
                 }
-
                 let draw_fc_mini_badge = |pt: egui::Pos2| {
                     let b = Rect::from_min_size(pt, Vec2::splat(14.0));
-                    painter.rect_filled(b, 0.0, Color32::from_rgb(36, 34, 20));
+                    painter.rect_filled(b, 0.0, p.banner);
                     painter.rect_stroke(
                         b,
                         0.0,
@@ -364,7 +363,7 @@ impl Shell {
                 // Bottom-right Fc Emblem Badge + Flame Mark
                 let badge_r =
                     Rect::from_min_size(pos2(col2_x + 4.0, body_bottom + 18.0), Vec2::splat(42.0));
-                painter.rect_filled(badge_r, 0.0, Color32::from_rgb(36, 34, 20));
+                painter.rect_filled(badge_r, 0.0, p.banner);
                 painter.rect_stroke(
                     badge_r,
                     0.0,
