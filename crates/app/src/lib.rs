@@ -7,6 +7,7 @@
 //! the window is glue.
 
 pub mod canvas;
+pub mod diagnostic;
 pub mod editor;
 pub mod keymap;
 pub mod menus;

@@ -1,12 +1,22 @@
+#![allow(dead_code)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::needless_return)]
+
 //! The egui face of the editor: menus, panels, canvas. Thin by rule —
 //! every document change you see here is an [`Editor::apply`] call,
 //! and every panel reads the document read-only. Desktop file routing
 //! goes through the injected [`engine::platform`] traits ([`EnvDialogs`]
 //! in [`dialogs`]; real modal dialogs land with desktop integration).
-pub(crate) use dialogs::{
-    CanvasColorDialog, CanvasSizeDialog, ConfirmAction, ConfirmDialog, DisplayState, EnvDialogs,
-    ExportDialog, FeatherDialog, ImageSizeDialog, NumericTransformDialog, ScaleToDialog,
+#[cfg(feature = "native")]
+pub(crate) use dialog_types::DisplayState;
+pub(crate) use dialog_types::{
+    CanvasColorDialog, CanvasSizeDialog, ConfirmAction, ConfirmDialog, ExportDialog, FeatherDialog,
+    ImageSizeDialog, NumericTransformDialog, ScaleToDialog,
 };
+/// Native-only platform services.
+#[cfg(feature = "native")]
+pub(crate) use dialogs::EnvDialogs;
 pub(crate) use filters_ui::{
     FILTER_BOOL_KEYS, FILTER_FAMILIES, FILTER_PARAMS, FilterPreset, filter_preset,
 };
@@ -14,36 +24,52 @@ pub(crate) use guides_ui::GridDialog;
 pub(crate) use guides_ui::GuideDraft;
 
 mod canvas_ui;
+mod chrome;
+mod colors;
+pub mod constants;
+mod demo;
+mod dialog_types;
+#[cfg(feature = "native")]
 mod dialogs;
+#[cfg(feature = "native")]
+mod file_operations;
 mod filters_ui;
 mod glyphs;
 mod guides_ui;
+#[cfg(feature = "native")]
 mod html_preview;
 mod icons;
 mod optimize;
+mod page;
 mod palette;
 mod panel_windows;
 mod panels;
 mod panels_web;
+mod recovery;
 mod slice_editor;
+mod text_edit;
+pub mod theme;
 mod timeline;
+mod vector_icons;
+mod welcome_overlay;
 
 pub use optimize::OptimizeSettings;
 
-pub use glyphs::apply_chrome_theme;
-pub use glyphs::{
-    CHROME_ACCENT, CHROME_ACCENT_STROKE, CHROME_CANVAS_FILL, CHROME_PANEL_FILL,
-    CHROME_SURFACE_FILL, CHROME_TEXT, CHROME_WINDOW_FILL,
+pub use colors::{
+    cmyk_to_rgb, from_hex, hex_of, hls_to_rgb, hsv_to_rgb, rgb_to_cmyk, rgb_to_hls, rgb_to_hsv,
+    swatch_grid,
 };
+pub use glyphs::apply_chrome_theme;
+pub use glyphs::system_is_light;
 pub(crate) use glyphs::{draw_autoshape_glyph, symbol_type_label, tool_key, tool_label};
+pub use page::slugify;
 pub use panel_windows::{DockSide, PanelSummary, panel_inventory};
 
 use doc::{ObjectData, PathObject, SymbolInstanceObject, SymbolType, TextObject};
 use egui::{Color32, ColorImage, Pos2, Rect, Sense, TextureHandle, TextureOptions, Vec2};
 
-use base64::Engine as _;
-
 use crate::canvas::View;
+use crate::editor::object_bounds;
 use crate::editor::union_selection_bounds;
 use crate::editor::{
     AutoShape, DragConstraint, Editor, GradientHandle, NineSliceEdge, PixelSelectMode, StampShape,
@@ -257,6 +283,10 @@ pub struct Shell {
     /// hints; nothing in the document reads them yet.
     smart_guides: bool,
     snap_to_smart_guides: bool,
+    /// Active smart-guide lines (rendered by the canvas when
+    /// `snap_to_smart_guides` + `smart_guides` are on and the selection
+    /// aligns with the page or other selected objects).
+    smart_guides_lines: Vec<(geom::Point, geom::Point)>,
     /// View ▸ 9-Slice Scaling Guides ▸ Lock Guides (display intent
     /// until slice rendering lands).
     slice_locked: bool,
@@ -341,6 +371,116 @@ pub struct Shell {
     /// fields; switching swaps those with the parked tab's, so every
     /// existing code path keeps operating on "the current document"
     /// unchanged.
+    /// Default fill color for the palette and new objects.
+    pub(crate) fill_color: Color32,
+    /// Default stroke color for the palette and new objects.
+    pub(crate) stroke_color: Color32,
+    /// Active style library (for the Styles panel dropdown).
+    pub(crate) style_library: constants::StyleLibrary,
+    /// The color panel tab: which sub-tab is shown in the color picker.
+    pub(crate) color_tab: usize,
+    /// Color panel sub-tab: 0=Selector, 1=Mixers, 2=Blender.
+    pub(crate) color_subtab: usize,
+    /// The currently selected style index in the styles panel.
+    pub(crate) selected_style_idx: Option<usize>,
+    /// `RulerUnit` for canvas rulers.
+    pub(crate) ruler_unit: crate::shell::constants::RulerUnit,
+    /// Snap to objects (alongside `snap_to_guides`).
+    pub(crate) snap_to_objects: bool,
+    /// Snap object tolerance in pixels.
+    pub(crate) snap_object_tolerance: f32,
+    /// Cursor override (e.g. crosshair during selection).
+    pub(crate) cursor_override: Option<egui::CursorIcon>,
+    /// Left tool dock zone.
+    pub(crate) tools_zone: crate::shell::constants::ToolsDockMode,
+    /// Floating tool dock position.
+    pub(crate) tools_floating_pos: egui::Pos2,
+    /// Right dock collapsed state.
+    pub(crate) right_dock_collapsed: bool,
+    /// Right dock zone.
+    pub(crate) right_dock_zone: crate::shell::constants::ToolsDockMode,
+    /// Floating right dock position.
+    pub(crate) right_dock_floating_pos: egui::Pos2,
+    /// Iconic mode flyout target panel.
+    pub(crate) iconic_flyout_panel: Option<constants::PanelId>,
+    /// Floating doc tab indices.
+    pub(crate) floating_doc_tabs: Vec<usize>,
+    /// Window-level fullscreen toggle.
+    pub(crate) window_fullscreen: bool,
+    /// Panel being dragged for grouping.
+    /// Show HTML setup dialog.
+    pub(crate) show_html_setup_dialog: bool,
+    /// Show page setup dialog.
+    pub(crate) show_page_setup_dialog: bool,
+    /// HTML export settings.
+    pub(crate) html_setup: constants::HtmlExportOptions,
+    /// Page setup settings.
+    pub(crate) page_setup: constants::PageSetupConfig,
+    /// Update dialog open flag.
+    pub(crate) show_update_dialog: bool,
+    /// Update status message.
+    pub(crate) update_status: String,
+    /// Latest version string.
+    pub(crate) update_latest_version: Option<String>,
+    pub(crate) dragging_group: Option<u64>,
+    /// Monotonically increasing id for panel groups.
+    pub(crate) next_panel_group_id: u64,
+    /// Panel being dragged individually (for floating panel groups).
+    pub(crate) dragging_panel: Option<u64>,
+    /// Release URL.
+    pub(crate) update_release_url: Option<String>,
+    /// Tab pending close (Save/Don't Save/Cancel).
+    pub(crate) pending_close_tab: Option<usize>,
+    /// Extra-layer multi-select (row, `layer_id`).
+    pub(crate) selected_extra_layers: Vec<(usize, usize)>,
+    /// Show canvas footer bar.
+    pub(crate) show_canvas_footer_bar: bool,
+    /// Canvas footer height.
+    pub(crate) canvas_footer_height: f32,
+    /// Show footer transport controls.
+    pub(crate) show_footer_transport: bool,
+    /// Footer resolution display.
+    pub(crate) footer_resolution: String,
+    /// Footer scale display.
+    pub(crate) footer_scale: String,
+    /// Current animation frame.
+    pub(crate) footer_frame: usize,
+    /// Show bottom transport bar.
+    pub(crate) show_transport: bool,
+    /// Transport current frame.
+    pub(crate) transport_frame: usize,
+    /// Transport total frames.
+    pub(crate) transport_total_frames: usize,
+    /// Transport playing flag.
+    pub(crate) transport_playing: bool,
+    /// Transport frame delay (centiseconds).
+    pub(crate) transport_frame_delay: u32,
+    /// Active workspace theme mode (CS6 Charcoal Dark / Classic Light / System).
+    pub(crate) theme_mode: theme::ThemeMode,
+    /// Active workspace preset name ("Expanded Mode" / "Iconic Mode" / "Compact Mode").
+    pub(crate) workspace_preset: &'static str,
+    /// Active canvas view mode (Original / Preview / 2-Up / 4-Up).
+    pub(crate) view_mode: chrome::CanvasViewMode,
+    /// Whether the left CS6 Tools palette is collapsed to 1 column.
+    pub(crate) tools_collapsed: bool,
+    /// Show the bottom CS6 Properties Inspector dock.
+    pub(crate) show_bottom_inspector: bool,
+    /// Whether the bottom Properties Inspector dock is collapsed to its header bar.
+    pub(crate) bottom_collapsed: bool,
+    /// Owner-controlled bottom Properties Inspector dock height (118..=340 px).
+    pub(crate) bottom_height: f32,
+    /// Active tab in the bottom Properties Inspector dock (0=Properties, 1=Symbol, 2=Info).
+    pub(crate) bottom_tab: usize,
+    /// Whether the CS6 Welcome Screen modal is currently shown.
+    pub show_welcome: bool,
+    /// "Don't show again" checkbox in the Welcome Screen modal.
+    pub(crate) dont_show_welcome_again: bool,
+    /// Latest pointer coordinate in document space (for rulers + status bar).
+    pub(crate) cursor_doc_pos: Option<Pos2>,
+    /// Active flyout panel name when the right dock is collapsed to Iconic Mode.
+    pub(crate) iconic_flyout_name: Option<&'static str>,
+
+    /// Background document tabs (20.5).
     tabs: Vec<DocTab>,
 }
 
@@ -527,17 +667,47 @@ impl Shell {
     #[must_use]
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         apply_chrome_theme(&cc.egui_ctx);
-        let layout = cc
+        let saved_layout = cc
             .storage
-            .and_then(|storage| eframe::get_value::<ShellLayout>(storage, "shell_layout"))
-            .unwrap_or_default();
+            .and_then(|storage| eframe::get_value::<ShellLayout>(storage, "shell_layout"));
+        let has_saved_layout = saved_layout.is_some();
+        let layout = saved_layout.unwrap_or_default();
         let mut shell = Self::with_platform(
             Editor::untitled(),
-            std::rc::Rc::new(app_cli::io::StdFs),
-            Box::new(EnvDialogs::default()),
+            {
+                #[cfg(feature = "native")]
+                {
+                    std::rc::Rc::new(app_cli::io::StdFs)
+                }
+                #[cfg(not(feature = "native"))]
+                {
+                    std::rc::Rc::new(engine::platform::NoOpFs)
+                }
+            } as _,
+            {
+                #[cfg(feature = "native")]
+                {
+                    Box::new(EnvDialogs::default()) as _
+                }
+                #[cfg(not(feature = "native"))]
+                {
+                    Box::new(stubs::StubDialogs) as _
+                }
+            },
         );
-        shell.layout = layout;
-        shell.apply_layout();
+        if has_saved_layout {
+            shell.layout = layout;
+            shell.apply_layout();
+            if shell.panel_groups.is_empty() {
+                shell.ensure_cs6_dock_groups();
+            }
+            shell.show_rulers = true;
+            shell.show_bottom_inspector = true;
+            shell.show_welcome = true;
+            shell.load_demo_showcase();
+        } else {
+            shell.apply_studio_defaults();
+        }
         #[cfg(not(target_arch = "wasm32"))]
         shell.check_recovery();
         shell
@@ -604,6 +774,7 @@ impl Shell {
             grid_dialog: None,
             smart_guides: true,
             snap_to_smart_guides: true,
+            smart_guides_lines: Vec::new(),
             slice_locked: false,
             slice_guides: true,
             slice_overlay: true,
@@ -636,6 +807,60 @@ impl Shell {
             layout: ShellLayout::default(),
             playback: timeline::Playback::default(),
             ctx: None,
+            fill_color: Color32::WHITE,
+            stroke_color: Color32::BLACK,
+            style_library: constants::StyleLibrary::default(),
+            color_tab: 0,
+            color_subtab: 0,
+            selected_style_idx: None,
+            ruler_unit: constants::RulerUnit::default(),
+            snap_to_objects: false,
+            snap_object_tolerance: 4.0,
+            cursor_override: None,
+            tools_zone: constants::ToolsDockMode::default(),
+            tools_floating_pos: egui::Pos2::new(0.0, 0.0),
+            right_dock_collapsed: false,
+            right_dock_zone: constants::ToolsDockMode::default(),
+            right_dock_floating_pos: egui::Pos2::new(0.0, 0.0),
+            iconic_flyout_panel: None,
+            floating_doc_tabs: Vec::new(),
+            window_fullscreen: false,
+            dragging_group: None,
+            show_html_setup_dialog: false,
+            show_page_setup_dialog: false,
+            html_setup: constants::HtmlExportOptions::default(),
+            page_setup: constants::PageSetupConfig::default(),
+            show_update_dialog: false,
+            update_status: String::new(),
+            update_latest_version: None,
+            next_panel_group_id: 0,
+            dragging_panel: None,
+            update_release_url: None,
+            pending_close_tab: None,
+            selected_extra_layers: Vec::new(),
+            show_canvas_footer_bar: true,
+            canvas_footer_height: 28.0,
+            show_footer_transport: true,
+            footer_resolution: String::new(),
+            footer_scale: String::new(),
+            footer_frame: 0,
+            show_transport: true,
+            transport_frame: 0,
+            transport_total_frames: 0,
+            transport_playing: false,
+            transport_frame_delay: 100,
+            theme_mode: theme::ThemeMode::Dark,
+            workspace_preset: "Expanded Mode",
+            view_mode: chrome::CanvasViewMode::Original,
+            tools_collapsed: false,
+            show_bottom_inspector: false,
+            bottom_collapsed: false,
+            bottom_height: 148.0,
+            bottom_tab: 0,
+            show_welcome: false,
+            dont_show_welcome_again: false,
+            cursor_doc_pos: None,
+            iconic_flyout_name: None,
             tabs: Vec::new(),
         }
     }
@@ -706,7 +931,16 @@ impl Shell {
                 .map(|spec| spec.name)
                 .filter(|name| members.contains(name))
                 .unwrap_or(members[0]);
-            groups.push(panel_windows::PanelGroup { members, active });
+            groups.push(panel_windows::PanelGroup {
+                members,
+                active,
+                id: self.next_panel_group_id,
+                floating_pos: egui::Pos2::ZERO,
+                floating_width: 220.0,
+                stack_parent: None,
+                collapsed: false,
+                body_height: 300.0,
+            });
         }
         groups.retain(|group| group.members.len() > 1);
         self.panel_groups = groups;
@@ -797,31 +1031,42 @@ impl Shell {
     ///
     /// # Errors
     /// Whatever both readers refuse; the current document is kept.
+    #[allow(unused_variables)]
     pub fn load_document_bytes(&mut self, bytes: &[u8]) -> Result<(), engine::EngineError> {
-        match Editor::open(bytes) {
-            Ok(editor) => {
-                self.raster = None;
-                self.raster_scale = 1.0;
-                self.editor = editor;
-                self.view = View::default();
-                self.status = "opened document".to_owned();
-                Ok(())
-            }
-            Err(document_error) => {
-                if self.document_has_content() {
-                    self.place_raster_into_document(bytes, "imported image")
-                        .map_err(|_| document_error)?;
-                    self.status = "placed image in the document".to_owned();
-                } else {
-                    self.open_raster_document(bytes, "imported image")
-                        .map_err(|_| document_error)?;
+        #[cfg(feature = "native")]
+        {
+            match Editor::open(bytes) {
+                Ok(editor) => {
                     self.raster = None;
                     self.raster_scale = 1.0;
-                    self.status = "opened image".to_owned();
+                    self.editor = editor;
                     self.view = View::default();
+                    self.status = "opened document".to_owned();
+                    Ok(())
                 }
-                Ok(())
+                Err(document_error) => {
+                    if self.document_has_content() {
+                        self.place_raster_into_document(bytes, "imported image")
+                            .map_err(|_| document_error)?;
+                        self.status = "placed image in the document".to_owned();
+                    } else {
+                        self.open_raster_document(bytes, "imported image")
+                            .map_err(|_| document_error)?;
+                        self.raster = None;
+                        self.raster_scale = 1.0;
+                        self.status = "opened image".to_owned();
+                        self.view = View::default();
+                    }
+                    Ok(())
+                }
             }
+        }
+        #[cfg(not(feature = "native"))]
+        {
+            return Err(engine::EngineError::InvalidState {
+                name: "load".into(),
+                detail: "documents require native build".into(),
+            });
         }
     }
 
@@ -842,134 +1087,9 @@ impl Shell {
     /// a mutual exchange with the parked slot. The transient
     /// `Editor::untitled()` placeholders exist only between the two
     /// `replace`s and are both overwritten before the call returns.
-    fn activate_tab(&mut self, index: usize) {
-        if index >= self.tabs.len() {
-            return;
-        }
-        let active = DocTab {
-            editor: std::mem::replace(&mut self.editor, Editor::untitled()),
-            view: self.view,
-            raster: self.raster.take(),
-            raster_scale: self.raster_scale,
-            doc_name: std::mem::take(&mut self.doc_name),
-            doc_path: self.doc_path.take(),
-        };
-        let parked = std::mem::replace(
-            &mut self.tabs[index],
-            DocTab {
-                editor: active.editor,
-                view: active.view,
-                raster: active.raster,
-                raster_scale: active.raster_scale,
-                doc_name: active.doc_name,
-                doc_path: active.doc_path,
-            },
-        );
-        self.editor = parked.editor;
-        self.view = parked.view;
-        self.raster = parked.raster;
-        self.raster_scale = parked.raster_scale;
-        self.doc_name = parked.doc_name;
-        self.doc_path = parked.doc_path;
-        self.status = format!("switched to {}", self.doc_name);
-    }
-
     /// File → Open through the injected traits. A Fireworks PNG
     /// opens as a document; any other supported raster opens as a
     /// document sized to the image — one door, no guessing.
-    fn open_document(&mut self) {
-        let Some(path) = self.dialogs.open_path(
-            "Open document",
-            &[
-                ("FireCraft document".to_owned(), vec!["png".to_owned()]),
-                (
-                    "Images".to_owned(),
-                    vec![
-                        "png".to_owned(),
-                        "jpg".to_owned(),
-                        "jpeg".to_owned(),
-                        "gif".to_owned(),
-                        "bmp".to_owned(),
-                        "tif".to_owned(),
-                        "tiff".to_owned(),
-                        "webp".to_owned(),
-                    ],
-                ),
-            ],
-        ) else {
-            return;
-        };
-        let bytes = match self.fs.read_file(&path).map_err(|e| e.to_string()) {
-            Ok(bytes) => bytes,
-            Err(error) => {
-                self.status = format!("open failed: {error}");
-                return;
-            }
-        };
-        match Editor::open(&bytes) {
-            Ok(editor) => {
-                self.status = format!("opened {path}");
-                // Park the previous document rather than dropping it
-                // (20.5 multi-document tabs).
-                let previous = DocTab {
-                    editor: std::mem::replace(&mut self.editor, editor),
-                    view: self.view,
-                    raster: self.raster.take(),
-                    raster_scale: self.raster_scale,
-                    doc_name: std::mem::take(&mut self.doc_name),
-                    doc_path: self.doc_path.take(),
-                };
-                self.tabs.push(previous);
-                self.raster = None;
-                self.raster_scale = 1.0;
-                self.view = View::default();
-                self.doc_path = Some(path.clone());
-                self.doc_name = std::path::Path::new(&path)
-                    .file_name()
-                    .map_or_else(|| path.clone(), |name| name.to_string_lossy().into_owned());
-            }
-            Err(document_error) => {
-                // Not a Fireworks PNG — try a plain raster. A raster
-                // opens as its own document, sized to the image, which
-                // is what CS6 does with a JPEG.
-                let name = std::path::Path::new(&path)
-                    .file_name()
-                    .map_or_else(|| path.clone(), |name| name.to_string_lossy().into_owned());
-                // `open_raster_document` overwrites the active
-                // editor, so park the previous document first and
-                // restore it if the decode fails.
-                let previous = DocTab {
-                    editor: std::mem::replace(&mut self.editor, Editor::untitled()),
-                    view: self.view,
-                    raster: self.raster.take(),
-                    raster_scale: self.raster_scale,
-                    doc_name: std::mem::take(&mut self.doc_name),
-                    doc_path: self.doc_path.take(),
-                };
-                match self.open_raster_document(&bytes, &name) {
-                    Ok(()) => {
-                        self.tabs.push(previous);
-                        self.status = format!("opened {path} as an image");
-                        self.raster = None;
-                        self.raster_scale = 1.0;
-                        self.view = View::default();
-                        self.doc_name = name;
-                        self.doc_path = Some(path.clone());
-                    }
-                    Err(_) => {
-                        self.editor = previous.editor;
-                        self.view = previous.view;
-                        self.raster = previous.raster;
-                        self.raster_scale = previous.raster_scale;
-                        self.doc_name = previous.doc_name;
-                        self.doc_path = previous.doc_path;
-                        self.status = format!("open failed: {document_error}");
-                    }
-                }
-            }
-        }
-    }
-
     /// File → Save through the injected traits.
     /// Help ▸ Manage Extensions / Commands ▸ Run Script: pick a
     /// `.jsf` script or a `.fwsteps` journal and run it against the
@@ -979,357 +1099,43 @@ impl Shell {
     /// automation formats). A script that throws or hits a limit, or
     /// a journal that refuses, leaves the document untouched and
     /// reports the failure on the status line.
-    fn run_script_file(&mut self) {
-        let Some(path) = self.dialogs.open_path(
-            "Run script",
-            &[
-                ("FireCraft script".to_owned(), vec!["jsf".to_owned()]),
-                ("FireCraft steps".to_owned(), vec!["fwsteps".to_owned()]),
-            ],
-        ) else {
-            return;
-        };
-        let source = match self.fs.read_file(&path) {
-            Ok(bytes) => String::from_utf8_lossy(&bytes).into_owned(),
-            Err(error) => {
-                self.status = format!("script read failed: {error}");
-                return;
-            }
-        };
-        let name = std::path::Path::new(&path)
-            .file_name()
-            .map_or_else(|| path.clone(), |n| n.to_string_lossy().into_owned());
-        if path.ends_with(".fwsteps") {
-            match self.editor.replay_steps(&source) {
-                Ok(()) => {
-                    let rows = self.editor.session.journal_len();
-                    self.status = format!("ran steps {name} ({rows} journal row(s))");
-                    self.raster = None;
-                    self.raster_scale = 1.0;
-                }
-                Err(error) => self.status = format!("steps {name} failed: {error}"),
-            }
-            return;
-        }
-        let mut engine = match scripting::ScriptEngine::new(scripting::Limits::default()) {
-            Ok(engine) => engine,
-            Err(error) => {
-                self.status = format!("script engine: {error}");
-                return;
-            }
-        };
-        // The run needs an `Rc`; the shell keeps its own — cloning is
-        // all it takes, no swap, and the shell's handle survives the
-        // script machinery's clones.
-        let fs_for_run = std::rc::Rc::clone(&self.fs);
-        let report = scripting::run_with_file_system(fs_for_run, || {
-            scripting::run_in_session(&mut self.editor.session, &mut engine, &name, &source)
-        });
-        if report.completed() {
-            self.status = format!("ran {name} ({} host call(s))", report.host_calls);
-            self.raster = None;
-            self.raster_scale = 1.0;
-        } else {
-            self.status = format!(
-                "script {name} failed: {}",
-                report.message.as_deref().unwrap_or("unknown error")
-            );
-        }
-    }
-
     /// The Commands/Help extension surface. Today the manager *is*
     /// the script runner: pick and execute a `.jsf`. CS6's broader
     /// extension manager (install/uninstall packages) is recorded as
     /// a gap, not silently absent.
-    fn open_extension_manager(&mut self) {
-        self.run_script_file();
-    }
-
     /// File ▸ File Info: the document's facts on one line — name,
     /// pages, layers, objects, canvas.
-    fn file_info_summary(&self) -> String {
-        let document = self.editor.session.document();
-        let pages = document.pages.len();
-        let layers: usize = document
-            .pages
-            .iter()
-            .map(|page| page.layers.layers.len())
-            .sum();
-        let objects = document.registry.len();
-        let canvas = &document.pages[self.editor.page].info.canvas;
-        format!(
-            "{} — {pages} page(s), {layers} layer(s), {objects} object(s), canvas {}×{}",
-            self.doc_name, canvas.width, canvas.height
-        )
-    }
-
     /// File ▸ Send to E-mail ▸ Fireworks PNG (format)…: the PNG
     /// format facts of the live document — the canvas the format
     /// stores, its color depth, and the object count it carries.
-    fn png_format_summary(&self) -> String {
-        let document = self.editor.session.document();
-        let canvas = &document.pages[self.editor.page].info.canvas;
-        format!(
-            "Fireworks PNG — {}×{} px, 32-bit RGBA, {} object(s); e-mail delivery is not \
-             available in this build",
-            canvas.width,
-            canvas.height,
-            document.registry.len()
-        )
-    }
-
     /// File ▸ Preview in Browser: export the document to PNG file(s)
     /// and open them in the system browser. Saved documents write next
     /// to the document file; unsaved ones use a temp directory. The
     /// secondary-browser row opens the same default handler — CS6's
     /// per-browser configuration is not kept in this build (the Set
     /// Browser rows say so).
-    fn preview_in_browser(&mut self, secondary: bool, all_pages: bool) {
-        let _ = secondary;
-        let dialog = crate::shell::dialogs::ExportDialog::default();
-        let document = self.editor.session.document().clone();
-        let page_count = if all_pages { document.pages.len() } else { 1 };
-        let base = self.doc_path.as_ref().map_or_else(
-            || std::env::temp_dir().join("firecraft-preview"),
-            |path| {
-                let mut stem = std::path::PathBuf::from(path);
-                stem.set_extension("");
-                stem
-            },
-        );
-        let mut opened = 0usize;
-        let mut failed = false;
-        for page in 0..page_count {
-            let mut export_document = document.clone();
-            if let Some(target) = export_document.pages.get_mut(page) {
-                target.export = Some(Self::dialog_options(&dialog));
-            }
-            let name = if page_count == 1 {
-                format!("{}.png", base.display())
-            } else {
-                format!("{}-page{}.png", base.display(), page + 1)
-            };
-            let flags = Self::dialog_flags(&dialog);
-            match app_cli::ops::export_raster(&export_document, &name, &flags) {
-                Ok(bytes) => {
-                    if std::fs::write(&name, &bytes).is_ok()
-                        && self.dialogs.open_url(&format!("file://{name}"))
-                    {
-                        opened += 1;
-                    } else {
-                        failed = true;
-                    }
-                }
-                Err(error) => {
-                    self.status = format!("preview export failed: {error}");
-                    return;
-                }
-            }
-        }
-        self.status = if failed {
-            format!("exported {opened} preview(s); the browser could not be opened")
-        } else {
-            format!("exported and opened {opened} preview(s) in the browser")
-        };
-    }
-
     /// File ▸ Revert: reload the document from the file it was last
     /// saved to, discarding the in-memory edits.
-    fn revert_document(&mut self) {
-        let Some(path) = self.doc_path.clone() else {
-            self.status = "revert needs a document saved to a file".to_owned();
-            return;
-        };
-        // CS6 prompts before discarding unsaved edits; refuse rather
-        // than silently dropping work.
-        if self.editor.session.is_dirty() {
-            self.status = "document has unsaved changes — save before reverting".to_owned();
-            return;
-        }
-        let bytes = match self.fs.read_file(&path).map_err(|error| error.to_string()) {
-            Ok(bytes) => bytes,
-            Err(error) => {
-                self.status = format!("revert failed: {error}");
-                return;
-            }
-        };
-        match Editor::open(&bytes) {
-            Ok(editor) => {
-                self.editor = editor;
-                self.view = View::default();
-                self.raster = None;
-                self.raster_scale = 1.0;
-                self.status = format!("reverted to {path}");
-            }
-            Err(error) => self.status = format!("revert failed: {error}"),
-        }
-    }
-
-    fn save_document(&mut self) {
-        let Some(path) = self.dialogs.save_path(
-            "Save document",
-            "untitled.fw.png",
-            &[("FireCraft document".to_owned(), vec!["png".to_owned()])],
-        ) else {
-            return;
-        };
-        match self.editor.save() {
-            Ok(bytes) => match self.fs.write_file(&path, &bytes) {
-                Ok(()) => {
-                    self.editor.session.mark_clean();
-                    #[cfg(not(target_arch = "wasm32"))]
-                    self.clear_recovery();
-                    self.doc_path = Some(path.clone());
-                    self.doc_name = std::path::Path::new(&path)
-                        .file_name()
-                        .map_or_else(|| path.clone(), |name| name.to_string_lossy().into_owned());
-                    self.status = format!("saved {path} ({} bytes)", bytes.len());
-                }
-                Err(error) => self.status = format!("save failed: {error}"),
-            },
-            Err(error) => self.status = format!("save failed: {error}"),
-        }
-    }
-
     /// Applies through the editor and reports failures on the status
     /// line — the one idiom every menu/panel action shares. Returns
     /// whether the command was accepted.
-    fn run_command(&mut self, name: &str, payload: serde_json::Value) -> bool {
-        match self.editor.apply(name, payload) {
-            Ok(()) => true,
-            Err(error) => {
-                self.status = format!("{name} failed: {error}");
-                false
-            }
-        }
-    }
-
     /// Begin in-canvas editing of the text object under `id` (20.1):
     /// snapshot its characters and open the overlay. Re-opening on the
     /// same object keeps the live buffer (a click back into the edit
     /// must not wipe what was typed).
-    pub(crate) fn begin_text_edit(&mut self, id: doc::ObjectId) {
-        if self.text_edit.as_ref().is_some_and(|edit| edit.id == id) {
-            return;
-        }
-        let original = match self.editor.document().registry.get(id) {
-            Some(doc::ObjectData::Text(text)) => text
-                .runs
-                .iter()
-                .map(|run| run.text.as_str())
-                .collect::<String>(),
-            _ => return,
-        };
-        self.text_edit = Some(TextEditState {
-            id,
-            buffer: original.clone(),
-            original,
-        });
-    }
-
     /// Commit the text-edit overlay: `text.setText` with the buffer
     /// when it changed; then the session closes the editor either way.
-    pub(crate) fn commit_text_edit(&mut self) {
-        let Some(edit) = self.text_edit.take() else {
-            return;
-        };
-        if edit.buffer == edit.original {
-            return;
-        }
-        if !self.run_command(
-            "text.setText",
-            serde_json::json!({ "id": edit.id, "text": edit.buffer }),
-        ) {
-            self.status = "text edit failed".to_owned();
-        }
-    }
-
     /// Cancel the text-edit overlay without touching the document.
-    pub(crate) fn cancel_text_edit(&mut self) {
-        self.text_edit = None;
-    }
-
     /// History → Save Steps…: the session journal written as a
     /// `.fwsteps` command file (JSON lines) through the injected
     /// traits. The file replays through [`Session::reopen`] — the same
     /// path the CLI's `apply` verb drives — so a saved command is not
     /// an export but the session's own restart record.
-    fn save_steps(&mut self) {
-        let Some(path) = self.dialogs.save_path(
-            "Save Steps As Command",
-            "steps.fwsteps",
-            &[("FireCraft steps".to_owned(), vec!["fwsteps".to_owned()])],
-        ) else {
-            return;
-        };
-        let text = self.editor.steps_text();
-        match self.fs.write_file(&path, text.as_bytes()) {
-            Ok(()) => {
-                self.status = format!(
-                    "saved steps {path} ({} rows)",
-                    self.editor.session.journal_len()
-                );
-            }
-            Err(error) => self.status = format!("save steps failed: {error}"),
-        }
-    }
-
     /// History → Replay…: pick a `.fwsteps` file, then the base
     /// document it replays onto (the File → Open flow — a steps file
     /// is a journal prefix, so it needs the pre-steps document). The
     /// replayed session replaces the current one, undo history
     /// included.
-    fn replay_steps(&mut self) {
-        let steps_filters = [("FireCraft steps".to_owned(), vec!["fwsteps".to_owned()])];
-        let Some(steps_path) = self.dialogs.open_path("Replay steps", &steps_filters) else {
-            return;
-        };
-        let steps = match self
-            .fs
-            .read_file(&steps_path)
-            .map_err(|error| error.to_string())
-            .and_then(|bytes| String::from_utf8(bytes).map_err(|error| error.to_string()))
-        {
-            Ok(text) => text,
-            Err(error) => {
-                self.status = format!("replay failed: {error}");
-                return;
-            }
-        };
-        let doc_filters = [("FireCraft document".to_owned(), vec!["png".to_owned()])];
-        let Some(doc_path) = self
-            .dialogs
-            .open_path("Base document for replay", &doc_filters)
-        else {
-            return;
-        };
-        let replayed = self
-            .fs
-            .read_file(&doc_path)
-            .map_err(|e| e.to_string())
-            .and_then(|bytes| {
-                Editor::open(&bytes)
-                    .map_err(|e| e.to_string())
-                    .and_then(|mut editor| {
-                        editor
-                            .replay_steps(&steps)
-                            .map(|()| editor)
-                            .map_err(|e| e.to_string())
-                    })
-            });
-        match replayed {
-            Ok(editor) => {
-                let rows = editor.session.journal_len();
-                self.editor = editor;
-                self.view = View::default();
-                self.raster = None;
-                self.raster_scale = 1.0;
-                self.status = format!("replayed {steps_path} onto {doc_path} ({rows} rows)");
-            }
-            Err(error) => self.status = format!("replay failed: {error}"),
-        }
-    }
-
     /// The CS6 menu bar: ten menus rendered from the [`crate::menus`]
     /// table. Items whose action is [`menus::Action::Inert`] render
     /// disabled — the bar shows the full CS6 surface while only the
@@ -1661,9 +1467,18 @@ impl Shell {
                 // JPEG export options. E-mail delivery itself is not
                 // wired in this build — say so instead of pretending.
                 let mut dialog = ExportDialog::default();
-                if let Some(index) = crate::shell::dialogs::EXPORT_FORMATS
-                    .iter()
-                    .position(|format| *format == "jpg")
+                if let Some(index) = {
+                    #[cfg(feature = "native")]
+                    {
+                        &crate::shell::dialogs::EXPORT_FORMATS
+                    }
+                    #[cfg(not(feature = "native"))]
+                    {
+                        &[] as &[&str]
+                    }
+                }
+                .iter()
+                .position(|format| *format == "jpg")
                 {
                     dialog.format = index;
                 }
@@ -1801,6 +1616,42 @@ impl Shell {
                     "online help: see the project wiki".to_owned()
                 };
             }
+            menus::ShellAction::FeatureList => {
+                let url = "https://github.com/aliasfoxkde/FireCraft/blob/main/docs/FEATURES.md";
+                let opened = self.dialogs.open_url(url);
+                self.status = if opened {
+                    format!("opening {url}")
+                } else {
+                    "feature list: see docs/FEATURES.md".to_owned()
+                };
+            }
+            menus::ShellAction::Tutorials => {
+                let url = "https://github.com/aliasfoxkde/FireCraft/wiki/Tutorials";
+                let opened = self.dialogs.open_url(url);
+                self.status = if opened {
+                    format!("opening {url}")
+                } else {
+                    "tutorials: see the FireCraft wiki".to_owned()
+                };
+            }
+            menus::ShellAction::ReportIssue => {
+                let url = "https://github.com/aliasfoxkde/FireCraft/issues/new/choose";
+                let opened = self.dialogs.open_url(url);
+                self.status = if opened {
+                    format!("opening issue templates at {url}")
+                } else {
+                    "report a bug or request a feature: see GitHub Issues".to_owned()
+                };
+            }
+            menus::ShellAction::ReleaseNotes => {
+                let url = "https://github.com/aliasfoxkde/FireCraft/blob/main/CHANGELOG.md";
+                let opened = self.dialogs.open_url(url);
+                self.status = if opened {
+                    format!("opening release notes at {url}")
+                } else {
+                    "release notes: see CHANGELOG.md".to_owned()
+                };
+            }
             menus::ShellAction::ManageExtensions => self.open_extension_manager(),
             menus::ShellAction::TogglePanel(name) => self.toggle_panel(name),
             menus::ShellAction::ToggleTools => self.toggle_tools(),
@@ -1820,7 +1671,16 @@ impl Shell {
             menus::ShellAction::PreviewInBrowser {
                 secondary,
                 all_pages,
-            } => self.preview_in_browser(secondary, all_pages),
+            } => {
+                #[cfg(feature = "native")]
+                {
+                    self.preview_in_browser(secondary, all_pages);
+                }
+                #[cfg(not(feature = "native"))]
+                {
+                    let _ = (secondary, all_pages);
+                }
+            }
             menus::ShellAction::Quit => self.close_requested = true,
             menus::ShellAction::Undo => match self.editor.undo() {
                 Ok(name) => self.status = format!("undid {name}"),
@@ -2211,6 +2071,7 @@ impl Shell {
 
     /// Engine commands whose payload derives from the current
     /// selection or document shape.
+    #[cfg(feature = "native")]
     fn run_sel(&mut self, action: menus::SelAction) {
         match action {
             menus::SelAction::Clone | menus::SelAction::Duplicate => {
@@ -2842,23 +2703,6 @@ impl Shell {
     /// `cmd_EditImageObject`): a selected text object opens the
     /// in-canvas text overlay; anything else reports that the kind has
     /// no editor in this build.
-    fn edit_text_selection(&mut self) {
-        let Some(id) = self.editor.selection else {
-            self.status = "select a text object to edit it".to_owned();
-            return;
-        };
-        let is_text = matches!(
-            self.editor.session.document().registry.get(id),
-            Some(doc::ObjectData::Text(_))
-        );
-        if is_text {
-            self.begin_text_edit(id);
-            self.status = "editing text".to_owned();
-        } else {
-            self.status = "the selected kind has no editor in this build".to_owned();
-        }
-    }
-
     /// Edit ▸ Insert ▸ Hotspot / slice rows / New Button…: the target
     /// rect is the selection's bounds (canvas center when nothing is
     /// selected); the button row appends a definition to the library.
@@ -3108,6 +2952,7 @@ impl Shell {
         if self.persisted == Some(stamp) {
             return;
         }
+        #[cfg(feature = "native")]
         if let Ok(bytes) = self.editor.save() {
             PERSIST_SINK.with(|cell| {
                 if let Some(sink) = cell.borrow().as_ref() {
@@ -3134,20 +2979,9 @@ impl Shell {
     /// The default recovery sidecar path: `FIRECRAFT_RECOVERY` when
     /// set, else the platform temp dir. Called once, at construction.
     #[cfg(not(target_arch = "wasm32"))]
-    fn default_recovery_path() -> std::path::PathBuf {
-        if let Ok(path) = std::env::var("FIRECRAFT_RECOVERY") {
-            return std::path::PathBuf::from(path);
-        }
-        std::env::temp_dir().join("firecraft-autorecover.fwsteps")
-    }
-
     /// The recovery sidecar path as a `&str` for the injected
     /// [`engine::platform::FileSystem`].
     #[cfg(not(target_arch = "wasm32"))]
-    fn recovery_path_str(&self) -> String {
-        self.recovery_path.to_string_lossy().into_owned()
-    }
-
     /// Periodic journal snapshot to the recovery sidecar (desktop;
     /// the web build persists the whole document through the browser
     /// instead). Debounced by the same change stamp the web persist
@@ -3156,109 +2990,22 @@ impl Shell {
     /// first steps must not resurrect a discarded recovery file, and
     /// a cleared journal must not outlive its session.
     #[cfg(not(target_arch = "wasm32"))]
-    fn recovery_tick(&mut self) {
-        let stamp = self.stamp();
-        if self.persisted == Some(stamp) {
-            return;
-        }
-        let path = self.recovery_path_str();
-        let outcome = if self.editor.session.journal_len() == 0 {
-            if self.fs.exists(&path) {
-                self.fs.remove_file(&path)
-            } else {
-                Ok(())
-            }
-        } else {
-            self.fs
-                .write_file(&path, self.editor.steps_text().as_bytes())
-        };
-        if outcome.is_ok() {
-            self.persisted = Some(stamp);
-        }
-    }
-
     /// Removes the recovery sidecar after a clean save or File ▸ New:
     /// the document now has a durable home, so a crash-recovery
     /// replay would only resurrect stale steps.
     #[cfg(not(target_arch = "wasm32"))]
-    fn clear_recovery(&mut self) {
-        let path = self.recovery_path_str();
-        if self.fs.exists(&path) {
-            let _ = self.fs.remove_file(&path);
-        }
-        self.persisted = None;
-    }
-
     /// Checks for a leftover recovery journal and, when found, arms
     /// the restore-offer window. Called from `Shell::new` only — a
     /// mid-session appearance would mean this very session crashed,
     /// which it cannot have.
     #[cfg(not(target_arch = "wasm32"))]
-    fn check_recovery(&mut self) {
-        let path = self.recovery_path_str();
-        if self.fs.exists(&path) {
-            self.recover_open = true;
-        }
-    }
-
     /// Replays the recovery journal onto the fresh untitled session
     /// (the crash-recovery path of `Editor::replay_steps`: history is
     /// reconstructed, so undo works across the crash boundary).
     #[cfg(not(target_arch = "wasm32"))]
-    fn recover_steps(&mut self) -> Result<usize, String> {
-        let path = self.recovery_path_str();
-        let text = self
-            .fs
-            .read_file(&path)
-            .map_err(|error| error.to_string())
-            .and_then(|bytes| String::from_utf8(bytes).map_err(|error| error.to_string()))?;
-        self.editor
-            .replay_steps(&text)
-            .map_err(|error| error.to_string())?;
-        let rows = self.editor.session.journal_len();
-        self.clear_recovery();
-        Ok(rows)
-    }
-
     /// The recovery-offer window: what was found, Recover (replay
     /// onto this session) or Discard (delete the sidecar).
     #[cfg(not(target_arch = "wasm32"))]
-    fn recovery_ui(&mut self, ui: &mut egui::Ui) {
-        if !self.recover_open {
-            return;
-        }
-        egui::Window::new("Recover unsaved work?")
-            .anchor(egui::Align2::CENTER_TOP, [0.0, 80.0])
-            .resizable(false)
-            .collapsible(false)
-            .show(ui.ctx(), |ui| {
-                ui.label(format!(
-                    "A journal snapshot from a previous session exists:\n{}",
-                    self.recovery_path.display()
-                ));
-                ui.label("Recover replays its steps onto this session; undo history comes back with them.");
-                ui.horizontal(|ui| {
-                    if ui.button("Recover").clicked() {
-                        match self.recover_steps() {
-                            Ok(rows) => {
-                                self.status = format!("recovered {rows} step(s) from the snapshot");
-                                self.view = View::default();
-                                self.raster = None;
-                                self.raster_scale = 1.0;
-                            }
-                            Err(error) => self.status = format!("recovery failed: {error}"),
-                        }
-                        self.recover_open = false;
-                    }
-                    if ui.button("Discard").clicked() {
-                        self.clear_recovery();
-                        self.recover_open = false;
-                        self.status = "recovery snapshot discarded".to_owned();
-                    }
-                });
-            });
-    }
-
     /// Files dropped onto the window open through the same one-door
     /// path as File ▸ Open: a Fireworks PNG replaces the document,
     /// any other supported raster opens as a document sized to the
@@ -3268,7 +3015,48 @@ impl Shell {
     /// crate reads the file and calls back through
     /// [`Shell::load_document_bytes`]); natively the read is direct.
     fn dropped_files(&mut self, ctx: &egui::Context) {
-        let dropped: Vec<_> = ctx.input(|input| input.raw.dropped_files.clone());
+        // Drop overlay: highlight the canvas when files are hovered
+        // or dropped — gives visual feedback that the canvas accepts
+        // file drops for import.
+        let (hovered, dropped) =
+            ctx.input(|i| (i.raw.hovered_files.clone(), i.raw.dropped_files.clone()));
+        if !hovered.is_empty() {
+            let screen = ctx.content_rect();
+            let p = ctx.layer_painter(egui::LayerId::new(
+                egui::Order::Foreground,
+                egui::Id::from(egui::ViewportId::from_hash_of("firecraft_drop_overlay")),
+            ));
+            p.rect_filled(
+                screen,
+                0.0,
+                Color32::from_rgb(0x2f, 0x5d, 0x8a).gamma_multiply(0.10),
+            );
+            p.rect_stroke(
+                screen.shrink(4.0),
+                4.0,
+                egui::Stroke::new(2.0, Color32::from_rgb(0x50, 0x7e, 0xab)),
+                egui::StrokeKind::Inside,
+            );
+            let hint_r = egui::Rect::from_center_size(screen.center(), egui::vec2(340.0, 44.0));
+            p.rect_filled(
+                hint_r,
+                4.0,
+                Color32::from_rgb(0x3c, 0x3c, 0x3c).gamma_multiply(0.95),
+            );
+            p.rect_stroke(
+                hint_r,
+                4.0,
+                egui::Stroke::new(1.0, Color32::from_rgb(0x50, 0x7e, 0xab)),
+                egui::StrokeKind::Middle,
+            );
+            p.text(
+                hint_r.center(),
+                egui::Align2::CENTER_CENTER,
+                "Drop Image / SVG to Import onto Canvas",
+                egui::FontId::proportional(12.5),
+                Color32::from_rgb(0xdd, 0xdd, 0xdd),
+            );
+        }
         let Some(file) = dropped.into_iter().next() else {
             return;
         };
@@ -3306,14 +3094,26 @@ impl eframe::App for Shell {
     /// memory) — on native to `storage_dir`, on web to localStorage.
     /// Layout only: documents are saved explicitly through the File
     /// menu, never as a side effect of closing the window.
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        let bg = self.active_palette().bg;
+        [
+            f32::from(bg.r()) / 255.0,
+            f32::from(bg.g()) / 255.0,
+            f32::from(bg.b()) / 255.0,
+            1.0,
+        ]
+    }
+
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(storage, "shell_layout", &self.capture_layout());
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         // Keep the context reachable for out-of-frame mutators (the
-        // web bridge's request_repaint).
+        // web bridge's request_repaint) and keep CS6 theme synced.
         self.ctx = Some(ui.ctx().clone());
+        self.apply_active_theme(ui.ctx());
+        let p = self.active_palette();
         // Preferences UI scale (21.4): apply the user factor when it
         // differs from what the context currently runs at. `None`
         // means "follow the platform default" — restore it when the
@@ -3328,6 +3128,7 @@ impl eframe::App for Shell {
         // Menu/shortcut actions run before layout so their effects are
         // visible the same frame.
         self.shortcuts(ui.ctx());
+        #[cfg(feature = "native")]
         self.dropped_files(ui.ctx());
         // The animation clock (issue #116): the frame's elapsed time
         // is the clock's only environmental input — the decision
@@ -3344,107 +3145,103 @@ impl eframe::App for Shell {
         #[cfg(not(target_arch = "wasm32"))]
         self.recovery_tick();
         // Panels first, CentralPanel last (egui's required order), in
-        // the CS6 arrangement: menu, context options bar, tool strip,
-        // panel stack (Properties included), status strip, canvas.
-        // The screen mode folds chrome on top of the dock folds: Full
-        // Screen hides menus, toolbars, tools, panels, status and the
-        // document tab strip against a black backdrop; Full Screen
-        // with Menus keeps the menu bar and paints the gray backdrop
-        // (fwref 1178–1185).
+        // the CS6 Studio arrangement: menu + header bar, main toolbar,
+        // bottom status bar, bottom resizable Properties Inspector dock,
+        // left 2-column CS6 tools palette, right stacked tab-group dock,
+        // central document tabs + view bar + canvas + unified canvas footer.
         let full_screen = self.screen_mode == ScreenMode::FullScreen;
         let menus_visible = !full_screen;
         if menus_visible {
-            egui::Panel::top(egui::Id::new("menu")).show(ui, |ui| self.menu_bar(ui));
+            egui::Panel::top(egui::Id::new("menu"))
+                .exact_size(26.0)
+                .frame(
+                    egui::Frame::new()
+                        .fill(p.panel)
+                        .inner_margin(egui::Margin::symmetric(6, 2)),
+                )
+                .show(ui, |ui| self.cs6_menu_bar(ui));
         }
         if !self.options_bar_hidden && !full_screen {
-            egui::Panel::top(egui::Id::new("options")).show(ui, |ui| self.options_bar(ui));
+            egui::Panel::top(egui::Id::new("options"))
+                .exact_size(28.0)
+                .frame(
+                    egui::Frame::new()
+                        .fill(p.panel_alt)
+                        .stroke(egui::Stroke::new(1.0, p.stroke))
+                        .inner_margin(egui::Margin::symmetric(6, 2)),
+                )
+                .show(ui, |ui| self.cs6_main_toolbar(ui));
+        }
+        if !full_screen {
+            egui::Panel::bottom(egui::Id::new("status"))
+                .exact_size(22.0)
+                .frame(
+                    egui::Frame::new()
+                        .fill(p.panel_alt)
+                        .stroke(egui::Stroke::new(1.0, p.stroke))
+                        .inner_margin(egui::Margin::symmetric(6, 2)),
+                )
+                .show(ui, |ui| self.cs6_status_bar(ui));
+        }
+        if self.show_bottom_inspector && !full_screen {
+            let dock_h = if self.bottom_collapsed {
+                28.0
+            } else {
+                self.bottom_height.clamp(118.0, 340.0)
+            };
+            egui::Panel::bottom(egui::Id::new("cs6_bottom_properties"))
+                .exact_size(dock_h)
+                .resizable(false)
+                .frame(
+                    egui::Frame::new()
+                        .fill(p.panel)
+                        .stroke(egui::Stroke::new(1.0, p.stroke))
+                        .inner_margin(egui::Margin::symmetric(
+                            6,
+                            if self.bottom_collapsed { 2 } else { 4 },
+                        )),
+                )
+                .show(ui, |ui| self.cs6_bottom_properties_dock(ui));
         }
         if !self.tools_hidden && !full_screen {
+            let tools_w = if self.tools_collapsed { 40.0 } else { 72.0 };
             egui::Panel::left(egui::Id::new("tools"))
-                .exact_size(34.0)
-                .show(ui, |ui| self.tools_panel(ui));
+                .exact_size(tools_w)
+                .resizable(false)
+                .frame(
+                    egui::Frame::new()
+                        .fill(p.panel)
+                        .stroke(egui::Stroke::new(1.0, p.stroke))
+                        .inner_margin(egui::Margin::symmetric(4, 2)),
+                )
+                .show(ui, |ui| self.cs6_tools_panel(ui));
         }
-        // The CS6 panel group: the right dock, one column of stacked
-        // panels. A side panel *reserves* its width, so the canvas
-        // shrinks instead of being covered, and the column scrolls so
-        // every panel stays reachable at any viewport height.
-        //
-        // The left column appears when a panel has been moved out of
-        // the right stack, or while a panel is being dragged — the
-        // drop target has to be there before the drag reaches it.
+        // The CS6 panel group: the right dock, stacked tabbed CS6 panel
+        // groups (or collapsed Iconic Mode icon rail with flyouts).
         if !self.panels_hidden && !full_screen {
-            // The title rects are this frame's drop targets, so they
-            // are recorded afresh: a panel dropped on another panel's
-            // title is tabbed with it.
             self.panel_title_rects.clear();
             let right = self.dock(ui);
             let left = self.left_dock(ui);
             self.finish_panel_drag(ui, right, left);
         } else {
-            // No dock is drawn, so no drop can be resolved — a drag
-            // still in flight is cancelled rather than left to move a
-            // panel on a later release.
             panel_windows::cancel_panel_drag(ui.ctx());
         }
-        if !full_screen {
-            egui::Panel::bottom(egui::Id::new("status")).show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    ui.label(&self.status);
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.label(format!(
-                            "{} · page {} · state {} · undo {} · redo {} · journal {}",
-                            self.doc_name,
-                            self.editor.page + 1,
-                            self.editor.frame + 1,
-                            self.editor.session.undo_len(),
-                            self.editor.session.redo_len(),
-                            self.editor.session.journal_len(),
-                        ));
-                    });
-                });
-            });
-        }
         egui::CentralPanel::default()
-            .frame(egui::Frame::NONE)
+            .frame(egui::Frame::new().fill(p.canvas_pad))
             .show(ui, |ui| {
-                // The document tab strip (20.5): the active document
-                // plus every parked tab, click to switch. A dot marks
-                // a tab with unsaved edits. Full Screen drops the
-                // title bar, tab strip included.
                 if !full_screen {
-                    ui.horizontal(|ui| {
-                        let tab_button =
-                            |ui: &mut egui::Ui, name: &str, is_dirty: bool, selected: bool| {
-                                let label = if is_dirty {
-                                    format!("{name} •")
-                                } else {
-                                    name.to_owned()
-                                };
-                                ui.add(
-                                    egui::Button::new(egui::RichText::new(label).size(11.0))
-                                        .selected(selected),
-                                )
-                            };
-                        tab_button(ui, &self.doc_name, self.editor.session.is_dirty(), true);
-                        // Snapshot labels/dirty flags so the switch
-                        // (a `&mut self` call) can't fight the
-                        // iterator.
-                        let parked: Vec<(String, bool)> = self
-                            .tabs
-                            .iter()
-                            .map(|tab| (tab.doc_name.clone(), tab.editor.session.is_dirty()))
-                            .collect();
-                        // Most recently parked first (CS6 stacks
-                        // newest-rightmost; `tabs` holds oldest
-                        // first).
-                        for index in (0..parked.len()).rev() {
-                            let (name, is_dirty) = &parked[index];
-                            if tab_button(ui, name, *is_dirty, false).clicked() {
-                                self.activate_tab(index);
-                            }
-                        }
-                        ui.weak("FireCraft");
-                    });
+                    self.cs6_document_tab_strip(ui);
+                    if self.show_canvas_footer_bar {
+                        egui::Panel::bottom(egui::Id::new("cs6_canvas_footer"))
+                            .exact_size(24.0)
+                            .frame(
+                                egui::Frame::new()
+                                    .fill(p.panel)
+                                    .stroke(egui::Stroke::new(1.0, p.stroke))
+                                    .inner_margin(egui::Margin::symmetric(8, 2)),
+                            )
+                            .show(ui, |ui| self.cs6_canvas_footer_bar(ui));
+                    }
                 }
                 self.canvas(ui);
             });
@@ -3520,6 +3317,7 @@ impl eframe::App for Shell {
         if self.help_open {
             self.help_panel(ui.ctx());
         }
+        self.render_welcome_overlay(ui.ctx());
         if self.close_requested {
             self.close_requested = false;
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
@@ -3536,11 +3334,15 @@ impl eframe::App for Shell {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+    #![allow(clippy::items_after_test_module)]
     use super::*;
+    #[allow(unused_imports)]
     use crate::editor::union_selection_bounds;
-    use engine::platform::{FileSystem, MemoryFs};
+    #[cfg(feature = "native")]
+    use engine::platform::FileSystem;
+    use engine::platform::MemoryFs;
 
     /// Scripted dialogs: the steps path answers the replay/save
     /// picks, the document path the base pick — matched by title.
@@ -3621,6 +3423,7 @@ mod tests {
     /// step the size presets, and Convert to Paths freezes the glyphs
     /// into a path object.
     #[test]
+    #[cfg(feature = "native")]
     fn text_menu_actions_reach_the_engine() {
         let (mut shell, id) = text_shell("hello");
         shell
@@ -3672,6 +3475,7 @@ mod tests {
     /// document; Close refuses to discard unsaved edits; Revert
     /// reloads the file the document was opened from.
     #[test]
+    #[cfg(feature = "native")]
     fn file_rows_report_and_guard_the_document() {
         let mut shell = gui_shell(Editor::untitled());
         shell.run_action(&menus::Action::Shell(menus::ShellAction::FileInfo));
@@ -3763,6 +3567,7 @@ mod tests {
     /// the action lays the text along the path's contours; a
     /// selection missing either half reports, and does not command.
     #[test]
+    #[cfg(feature = "native")]
     fn attach_to_path_needs_a_text_and_a_rail() {
         let (mut shell, text_id) = text_shell("along");
 
@@ -3822,6 +3627,7 @@ mod tests {
     /// objects, Delete removes through the registry, Arrange reorders
     /// with a post-removal index, and Inert renders but does nothing.
     #[test]
+    #[cfg(feature = "native")]
     fn menu_actions_drive_the_editor() {
         let mut shell = gui_shell(gui_editor());
         let first = shell.editor.current_cell().unwrap().elements[0];
@@ -3868,6 +3674,7 @@ mod tests {
     /// View ▸ Show All re-shows every hidden carrier in the document,
     /// driving `object.setVisible` per object through the registry.
     #[test]
+    #[cfg(feature = "native")]
     fn show_all_resurrects_hidden_objects() {
         let mut shell = gui_shell(gui_editor());
         let first = shell.editor.current_cell().unwrap().elements[0];
@@ -4062,6 +3869,7 @@ mod tests {
     /// lands on the active layer's cell, and the journal records the
     /// command — so the panel is a real edit, not a view.
     #[test]
+    #[cfg(feature = "native")]
     fn the_auto_shapes_panel_inserts_through_the_engine() {
         let mut shell = gui_shell(Editor::untitled());
         let journal = shell.editor.session.journal_len();
@@ -4124,6 +3932,7 @@ mod tests {
     /// redraw is the generator running again, not a move. With no
     /// path selected the row reports so and dispatches nothing.
     #[test]
+    #[cfg(feature = "native")]
     fn the_autoshapes_panel_redraws_the_selected_path() {
         let mut shell = gui_shell(gui_editor());
         let id = shell.editor.current_cell().expect("a cell").elements[0];
@@ -4258,6 +4067,7 @@ mod tests {
     /// The URL panel writes the anchor link and the alt text onto the
     /// selected slice, and an empty field clears the stored value.
     #[test]
+    #[cfg(feature = "native")]
     fn the_url_panel_stores_and_clears_the_link() {
         let (mut shell, id) = slice_shell("banner");
 
@@ -4283,6 +4093,7 @@ mod tests {
     /// through the engine — the stored kinds and the swap target are
     /// the document's own, not panel state.
     #[test]
+    #[cfg(feature = "native")]
     fn the_behaviors_panel_adds_and_removes_behaviors() {
         let (mut shell, id) = slice_shell("banner");
 
@@ -4987,6 +4798,7 @@ mod tests {
     /// and the canvas rotations re-map the page — all through the
     /// journal (undo restores the previous shape).
     #[test]
+    #[cfg(feature = "native")]
     fn page_frame_actions_drive_the_document() {
         // State: one frame in the seed, insert appends and activates.
         let mut shell = gui_shell(gui_editor());
@@ -5043,6 +4855,7 @@ mod tests {
     /// across frames — all through the journal — and each pick with
     /// nothing (or too little) selected is a status line, not a row.
     #[test]
+    #[cfg(feature = "native")]
     fn symbol_actions_drive_the_library() {
         // Convert to Symbol with content: one definition appears and
         // the command landed in the journal.
@@ -5122,6 +4935,7 @@ mod tests {
     /// `filter.setParam` through the journal (so undo restores
     /// it), and a pick with nothing selected is a status line.
     #[test]
+    #[cfg(feature = "native")]
     fn filter_actions_flow_through_the_journal() {
         let mut shell = gui_shell(gui_editor());
         shell.run_action(&menus::Action::Shell(menus::ShellAction::SelectAll));
@@ -5170,6 +4984,7 @@ mod tests {
     /// the rendered page — a preset that lands as an effect stack the
     /// kernel skips leaves the render untouched.
     #[test]
+    #[cfg(feature = "native")]
     fn the_shadowed_and_embossed_presets_reach_the_renderer() {
         for name in ["dropShadow", "emboss", "pillowEmboss"] {
             let mut shell = gui_shell(gui_editor());
@@ -5293,6 +5108,7 @@ mod tests {
     /// the page the editor edits — every object of the page and state
     /// the selection does not cover.
     #[test]
+    #[cfg(feature = "native")]
     fn select_inverse_complements_the_page() {
         let mut shell = gui_shell(gui_editor_two());
         let ids = shell.editor.current_cell().unwrap().elements.clone();
@@ -5322,6 +5138,7 @@ mod tests {
     /// active one — and the selection goes through the engine's
     /// command door, so the journal carries it.
     #[test]
+    #[cfg(feature = "native")]
     fn select_all_covers_every_layer_of_the_page() {
         let mut editor = gui_editor();
         let lower = editor.current_cell().unwrap().elements[0];
@@ -5362,6 +5179,7 @@ mod tests {
     /// Select ▸ Deselect: the object selection goes empty in the
     /// document as well as in the view — CS6's `dom.selectNone()`.
     #[test]
+    #[cfg(feature = "native")]
     fn deselect_clears_the_document_selection() {
         let mut shell = gui_shell(gui_editor());
         shell.run_action(&menus::Action::Shell(menus::ShellAction::SelectAll));
@@ -5381,6 +5199,7 @@ mod tests {
     /// `selection.selectAllOnLayer` scopes the selection to one layer
     /// and state, whatever else the page carries.
     #[test]
+    #[cfg(feature = "native")]
     fn select_layer_objects_scopes_to_one_layer() {
         let mut editor = gui_editor();
         let lower = editor.current_cell().unwrap().elements[0];
@@ -5410,6 +5229,7 @@ mod tests {
     /// page and `page.delete` removes it — and the last page cannot
     /// go.
     #[test]
+    #[cfg(feature = "native")]
     fn the_pages_panel_renames_and_deletes_pages() {
         let mut shell = gui_shell(gui_editor());
         shell.run_command("page.add", serde_json::json!({ "index": null }));
@@ -5442,6 +5262,7 @@ mod tests {
     /// appearance becomes the named style, and the scale multiplies
     /// every style's text size.
     #[test]
+    #[cfg(feature = "native")]
     fn the_styles_panel_redefines_and_scales_styles() {
         let mut shell = gui_shell(gui_editor());
         let id = shell.editor.current_cell().unwrap().elements[0];
@@ -5505,6 +5326,7 @@ mod tests {
     /// The text properties' anti-alias dials: the custom sharpness,
     /// strength and oversampling reach the text object.
     #[test]
+    #[cfg(feature = "native")]
     fn the_text_properties_write_the_anti_alias_dials() {
         let (mut shell, id) = text_shell("hello");
         shell.set_custom_anti_alias_sharpness(id, 200);
@@ -5521,6 +5343,7 @@ mod tests {
 
     /// The text properties' run field: one line per run, in order.
     #[test]
+    #[cfg(feature = "native")]
     fn the_text_properties_write_the_runs() {
         let (mut shell, id) = text_shell("hello");
         shell.set_text_runs(id, "one\ntwo");
@@ -5535,6 +5358,7 @@ mod tests {
     /// The text properties' frame: the box the text flows inside is
     /// written, and the object's own placement stays put.
     #[test]
+    #[cfg(feature = "native")]
     fn the_text_properties_write_the_text_frame() {
         let (mut shell, id) = text_shell("hello");
         shell.set_text_rectangle(id, 120.0, 30.0);
@@ -5549,6 +5373,7 @@ mod tests {
 
     /// The Pages panel's guide rows: a guide moves and goes away.
     #[test]
+    #[cfg(feature = "native")]
     fn the_guides_move_and_go_away() {
         let mut shell = gui_shell(gui_editor());
         shell.run_command(
@@ -5579,6 +5404,7 @@ mod tests {
     /// The Layers panel's "move the selection here": the object
     /// leaves its layer for the named one.
     #[test]
+    #[cfg(feature = "native")]
     fn the_selection_moves_to_another_layer() {
         let mut editor = gui_editor();
         let id = editor.current_cell().unwrap().elements[0];
@@ -5603,6 +5429,7 @@ mod tests {
     /// Modify ▸ Group / Ungroup: the group lands in the cell where the
     /// members were, and ungroup puts the members back.
     #[test]
+    #[cfg(feature = "native")]
     fn group_and_ungroup_fold_the_selection() {
         let mut shell = gui_shell(gui_editor_two());
         let ids = shell.editor.current_cell().unwrap().elements.clone();
@@ -5630,6 +5457,7 @@ mod tests {
     /// Modify ▸ Transform: a quarter turn swaps the object's extents,
     /// and a flip moves its points.
     #[test]
+    #[cfg(feature = "native")]
     fn transform_rotates_and_flips_the_selection() {
         let mut shell = gui_shell(gui_editor());
         let id = shell.editor.current_cell().unwrap().elements[0];
@@ -5659,6 +5487,7 @@ mod tests {
 
     /// The Numeric Transform dialog: scale+rotate through the menu
     /// action lands as one undo step through the journal.
+    #[cfg(feature = "native")]
     #[test]
     fn numeric_transform_dialog_applies_one_undo_step() {
         let mut shell = gui_shell(gui_editor());
@@ -5690,6 +5519,7 @@ mod tests {
     /// Modify ▸ Transform ▸ Scale To…: the dialog seeds from the
     /// selection's bounds and resizes it to the exact box through
     /// `object.resize`.
+    #[cfg(feature = "native")]
     #[test]
     fn scale_to_dialog_resizes_to_the_exact_box() {
         let mut shell = gui_shell(gui_editor());
@@ -5730,6 +5560,7 @@ mod tests {
     /// goes blank with the objects, and the undo label carries the
     /// verb, so one undo brings everything back.
     #[test]
+    #[cfg(feature = "native")]
     fn delete_all_asks_before_emptying_the_document() {
         let mut shell = gui_shell(gui_editor());
         let before = compose::render(
@@ -5840,6 +5671,7 @@ mod tests {
     /// per-state lock, and the reorder. The reorder keeps the moved
     /// layer active — the user keeps editing the layer they moved.
     #[test]
+    #[cfg(feature = "native")]
     fn the_layers_panel_renames_locks_and_reorders() {
         let mut shell = gui_shell(gui_editor());
         shell.run_action(&menus::Action::Sel(menus::SelAction::NewLayer));
@@ -5879,6 +5711,7 @@ mod tests {
     /// Modify ▸ Flatten Selection: the selection bakes into one
     /// bitmap, in place of the members.
     #[test]
+    #[cfg(feature = "native")]
     fn flatten_selection_bakes_into_one_bitmap() {
         let mut shell = gui_shell(gui_editor_two());
         let ids = shell.editor.current_cell().unwrap().elements.clone();
@@ -5912,6 +5745,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "native")]
     fn history_panel_saves_and_replays_steps() {
         let editor = gui_editor();
         let steps = editor.steps_text();
@@ -5958,6 +5792,7 @@ mod tests {
     /// the History panel uses, onto the live document — journal,
     /// history and all. A malformed steps file reports the refusal
     /// and leaves the document untouched.
+    #[cfg(feature = "native")]
     #[test]
     fn run_script_runs_a_steps_file_through_the_replay_door() {
         // Record a real journal, then run it as a script.
@@ -6020,6 +5855,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "native")]
     #[test]
     fn web_export_dialog_writes_html_and_files() {
         // A slice dragged on the canvas, then the dialog pointed at
@@ -6076,6 +5912,7 @@ mod tests {
 
     /// File ▸ Import… places the raster on the active layer, and the
     /// object that lands there is a real image object.
+    #[cfg(feature = "native")]
     #[test]
     fn import_places_a_raster_on_the_active_layer() {
         let mut shell = gui_shell(Editor::untitled());
@@ -6094,6 +5931,7 @@ mod tests {
     /// The active layer decides where the import lands: with a second
     /// layer added and selected, the object goes there — not to the
     /// layer underneath.
+    #[cfg(feature = "native")]
     #[test]
     fn import_lands_on_the_selected_layer() {
         let mut shell = gui_shell(Editor::untitled());
@@ -6123,6 +5961,7 @@ mod tests {
     /// mint a sibling image (the cut also clears the source); with no
     /// bitmap selected they report instead of commanding. Crop
     /// Document shrinks the canvas to the content extents.
+    #[cfg(feature = "native")]
     #[test]
     fn edit_bitmap_rows_drive_the_engine() {
         // Empty Bitmap.
@@ -6182,6 +6021,7 @@ mod tests {
 
     /// A shell with a 4×4 red raster imported on the active layer,
     /// and the imported image's id.
+    #[cfg(feature = "native")]
     fn shell_with_raster() -> (Shell, doc::ObjectId) {
         let mut shell = gui_shell(Editor::untitled());
         shell.import_raster(&red_png(), "red.png").expect("import");
@@ -6196,6 +6036,7 @@ mod tests {
     /// The brush lays its dabs on the image under the pointer, and the
     /// whole stroke undoes as one step.
     #[test]
+    #[cfg(feature = "native")]
     fn the_brush_paints_a_stroke_on_the_image() {
         let (mut shell, id) = shell_with_raster();
         shell.editor.tool = Tool::Paintbrush;
@@ -6235,6 +6076,7 @@ mod tests {
     /// The pencil draws a hard one-pixel line — the dab carries no
     /// size, edge or shape slot.
     #[test]
+    #[cfg(feature = "native")]
     fn the_pencil_draws_a_hard_line() {
         let (mut shell, id) = shell_with_raster();
         shell.editor.tool = Tool::Pencil;
@@ -6261,6 +6103,7 @@ mod tests {
     /// The paint bucket fills the image under the pointer with the
     /// paint color.
     #[test]
+    #[cfg(feature = "native")]
     fn the_paint_bucket_fills_the_image() {
         let (mut shell, id) = shell_with_raster();
         shell.editor.tool = Tool::PaintBucket;
@@ -6277,6 +6120,7 @@ mod tests {
     /// The eyedropper reads the pixel under the pointer into the
     /// brush model — the color model, not the document.
     #[test]
+    #[cfg(feature = "native")]
     fn the_eyedropper_picks_the_color_under_the_pointer() {
         let (mut shell, id) = shell_with_raster();
         shell.editor.tool = Tool::Eyedropper;
@@ -6293,6 +6137,7 @@ mod tests {
     /// The gradient tool paints a ramp between the press and the
     /// release points.
     #[test]
+    #[cfg(feature = "native")]
     fn the_gradient_paints_a_ramp_between_its_handles() {
         let (mut shell, id) = shell_with_raster();
         shell.editor.tool = Tool::Gradient;
@@ -6319,6 +6164,7 @@ mod tests {
     /// File ▸ Open on a plain raster opens it as its own document,
     /// with the canvas sized to the image.
     #[test]
+    #[cfg(feature = "native")]
     fn open_raster_sizes_the_document_to_the_image() {
         let mut shell = gui_shell(Editor::untitled());
         shell
@@ -6345,6 +6191,7 @@ mod tests {
     /// holds objects *places* it (the Import door) — the browser's one
     /// file input must not silently swap out the user's artwork.
     #[test]
+    #[cfg(feature = "native")]
     fn load_into_a_drawing_places_the_image_instead_of_replacing_it() {
         // Empty document: the raster becomes the document.
         let mut shell = gui_shell(Editor::untitled());
@@ -6380,6 +6227,7 @@ mod tests {
     /// `document_has_content` separates the two doors: empty page
     /// (fresh editor) is content-free, a drag-created rect is not.
     #[test]
+    #[cfg(feature = "native")]
     fn document_has_content_follows_the_cell() {
         assert!(!gui_shell(Editor::untitled()).document_has_content());
         assert!(gui_shell(gui_editor()).document_has_content());
@@ -6519,6 +6367,7 @@ mod tests {
 
     /// A pixel-selection helper shared by the 19.6 tests: a shell
     /// with a red raster and a committed non-empty marquee over it.
+    #[cfg(feature = "native")]
     fn shell_with_marquee() -> (Shell, doc::ObjectId) {
         let (mut shell, id) = shell_with_raster();
         shell.editor.tool = Tool::Marquee;
@@ -6537,6 +6386,7 @@ mod tests {
 
     /// The Feather dialog only opens over an active pixel selection,
     /// and the applied radius becomes the next dialog's default.
+    #[cfg(feature = "native")]
     #[test]
     fn the_feather_dialog_gates_on_a_pixel_selection() {
         let mut shell = gui_shell(gui_editor());
@@ -6632,6 +6482,7 @@ mod tests {
     /// The Canvas Size dialog opens seeded with the live canvas,
     /// resizes page 0 through the engine command, and shifts content
     /// opposite the anchor so the anchored corner stays fixed.
+    #[cfg(feature = "native")]
     #[test]
     fn the_canvas_size_dialog_resizes_about_the_anchor() {
         let mut shell = gui_shell(gui_editor());
@@ -6692,6 +6543,7 @@ mod tests {
     /// resolution, scales the document through `document.setImageSize`
     /// (objects ride the affine, images resample), and a failed apply
     /// keeps the dialog's status clean while the document is untouched.
+    #[cfg(feature = "native")]
     #[test]
     fn the_image_size_dialog_scales_the_document() {
         let mut shell = gui_shell(gui_editor());
@@ -6753,6 +6605,7 @@ mod tests {
 
     /// The Canvas Color dialog opens with the current matte, applies
     /// `document.setCanvasColor` document-wide, and cancels cleanly.
+    #[cfg(feature = "native")]
     #[test]
     fn the_canvas_color_dialog_sets_the_matte() {
         let mut shell = gui_shell(gui_editor());
@@ -6804,6 +6657,7 @@ mod tests {
     /// Marquee ⇄ path conversion and the bitmap-selection save/restore
     /// actions route to their engine commands through the shell.
     #[test]
+    #[cfg(feature = "native")]
     fn marquee_conversion_and_saved_selection_actions_dispatch() {
         let (mut shell, _id) = shell_with_marquee();
 
@@ -6829,6 +6683,7 @@ mod tests {
     /// Mask verbs refuse cleanly with nothing selected and route to
     /// `mask.*` commands with a live selection.
     #[test]
+    #[cfg(feature = "native")]
     fn mask_actions_require_a_selection() {
         let mut shell = gui_shell(gui_editor());
         shell.run_sel(menus::SelAction::AddMask { mode: "hide all" });
@@ -6851,6 +6706,7 @@ mod tests {
     /// flips with the mask's state: the toggle disables an enabled
     /// mask, re-enables a disabled one, and the row follows.
     #[test]
+    #[cfg(feature = "native")]
     fn mask_toggle_flips_the_mask_and_its_label() {
         let mut shell = gui_shell(gui_editor());
         let id = shell.editor.current_cell().unwrap().elements[0];
@@ -7006,6 +6862,7 @@ mod tests {
     /// the selection bounds (canvas center when nothing is selected),
     /// and New Button appends a button definition to the library.
     #[test]
+    #[cfg(feature = "native")]
     fn insert_web_rows_create_web_objects_and_buttons() {
         let (mut shell, id) = shell_with_raster();
         shell.editor.selection_set = vec![id];
@@ -7094,6 +6951,7 @@ mod tests {
     /// selected path, Edit Symbol enters the selected instance's
     /// definition scope, and non-instance selections report instead.
     #[test]
+    #[cfg(feature = "native")]
     fn fill_edge_and_edit_symbol_rows_drive_the_selection() {
         let mut shell = gui_shell(gui_editor());
         assert!(
@@ -7187,6 +7045,7 @@ mod tests {
     /// keystrokes, commit writes `text.setText` once, and re-opening
     /// the same object keeps the live buffer.
     #[test]
+    #[cfg(feature = "native")]
     fn text_edit_session_buffers_and_commits() {
         let (mut shell, id) = text_shell("hello");
         shell.begin_text_edit(id);
@@ -7226,6 +7085,7 @@ mod tests {
     /// 20.1 focus paths: a tool switch commits (CS6 commits the edit
     /// when you leave the Text tool); Esc closes without writing.
     #[test]
+    #[cfg(feature = "native")]
     fn text_edit_focus_paths() {
         let (mut shell, id) = text_shell("keep");
         // Tool switch commits a changed buffer exactly once.
@@ -7252,6 +7112,7 @@ mod tests {
     /// canvas geometry, resolution with unit, canvas color — and the
     /// multi-selection set fans a display edit out to every member.
     #[test]
+    #[cfg(feature = "native")]
     fn inspector_document_and_multi_selection_sets() {
         // Document set: canvas color and resolution round-trip.
         let (mut shell, _) = text_shell("doc");
@@ -7320,6 +7181,7 @@ mod tests {
     /// 22.5: Repeat Filter re-applies the last filter preset to the
     /// selection; with nothing applied yet it reports, never acts.
     #[test]
+    #[cfg(feature = "native")]
     fn repeat_filter_reapplies_the_last_preset() {
         let (mut shell, _id) = two_path_shell();
         // Nothing applied yet — the CS6 "no filters to repeat" report.
@@ -7373,6 +7235,7 @@ mod tests {
     /// 20.5 tabs: opening a second document parks the first and the
     /// tab strip state follows the active document.
     #[test]
+    #[cfg(feature = "native")]
     fn open_parks_the_previous_document() {
         let mut shell = open_shell("/mem/first.png");
         shell.open_document();
@@ -7384,6 +7247,7 @@ mod tests {
 
     /// Switching to a parked tab restores its editor, name, and path.
     #[test]
+    #[cfg(feature = "native")]
     fn activate_tab_swaps_state() {
         let mut shell = open_shell("/mem/first.png");
         shell.open_document();
@@ -7417,6 +7281,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "native")]
     fn close_promotes_the_last_parked_tab() {
         let mut shell = open_shell("/mem/first.png");
         shell.open_document();
@@ -7442,6 +7307,7 @@ mod tests {
 
     /// New parks the current document rather than discarding it.
     #[test]
+    #[cfg(feature = "native")]
     fn new_parks_the_current_document() {
         let mut shell = open_shell("/mem/first.png");
         shell.open_document();
@@ -7499,6 +7365,7 @@ mod tests {
     }
 
     /// The animation carrier of an instance.
+    #[cfg(feature = "native")]
     fn animation_of(shell: &Shell, id: doc::ObjectId) -> doc::SymbolAnimation {
         match shell.editor.document().registry.get(id) {
             Some(doc::ObjectData::SymbolInstance(instance)) => instance
@@ -7524,6 +7391,7 @@ mod tests {
     /// family: the frame count, the travel, the rotation, the
     /// scaling and the opacity ramp.
     #[test]
+    #[cfg(feature = "native")]
     fn the_animation_fields_write_the_span() {
         let (mut shell, id) = symbol_instance_shell("animation");
         shell.set_anim_num_frames(5);
@@ -7549,6 +7417,7 @@ mod tests {
     /// The button's four state flags live on the definition; the
     /// panel writes them through the engine.
     #[test]
+    #[cfg(feature = "native")]
     fn the_button_flags_write_the_definition() {
         let (mut shell, _id) = symbol_instance_shell("button");
         let number = shell.editor.document().symbols[0].symbol_number;
@@ -7566,6 +7435,7 @@ mod tests {
     /// The instance's parameters and custom data reach the engine's
     /// `currentValues` and `DTAv` stores.
     #[test]
+    #[cfg(feature = "native")]
     fn the_instance_carries_parameters_and_custom_data() {
         let (mut shell, id) = symbol_instance_shell("graphic");
         shell.set_symbol_param(id, "size", "text", "42");
@@ -7589,6 +7459,7 @@ mod tests {
     /// The definition's content: the panel lifts an object out of the
     /// symbol and moves one within the symbol's z-order.
     #[test]
+    #[cfg(feature = "native")]
     fn the_definition_content_detaches_and_reorders() {
         let mut editor = gui_editor();
         let first = editor.current_cell().unwrap().elements[0];
@@ -7631,6 +7502,7 @@ mod tests {
     /// "Duplicate for alias": the selected instance points at a copy
     /// of the definition it named.
     #[test]
+    #[cfg(feature = "native")]
     fn the_instance_can_be_duplicated_for_an_alias() {
         let (mut shell, id) = symbol_instance_shell("graphic");
         let number = shell.editor.document().symbols[0].symbol_number;
@@ -7662,6 +7534,7 @@ mod tests {
 
     /// The markup verbs restyle the *runs*, not the base style.
     #[test]
+    #[cfg(feature = "native")]
     fn the_markup_verbs_restyle_the_runs() {
         let (mut shell, id) = text_shell("hello");
         shell.apply_character_markup(id, "b");
@@ -7740,6 +7613,7 @@ mod tests {
     /// definitions, one across the definitions the selected instances
     /// reference.
     #[test]
+    #[cfg(feature = "native")]
     fn the_button_text_reaches_the_library_and_the_instances() {
         let (mut shell, id) = button_with_text_shell();
         shell.replace_button_text("Library");
@@ -7751,6 +7625,7 @@ mod tests {
     }
 
     /// One effect of an object.
+    #[cfg(feature = "native")]
     fn effect_of(shell: &Shell, id: doc::ObjectId, index: usize) -> doc::Effect {
         match shell.editor.document().registry.get(id) {
             Some(doc::ObjectData::Path(path)) => path.effects[index].clone(),
@@ -7759,6 +7634,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "native")]
     fn filter_rename_uses_the_draft_from_an_earlier_frame() {
         let (mut shell, id) = two_path_shell();
         shell.apply_filter_preset(id, FILTER_FAMILIES[0].1[0]);
@@ -7846,6 +7722,7 @@ mod tests {
     /// CS6's `setEffectName`: the effect keeps its category and takes
     /// the new internal name.
     #[test]
+    #[cfg(feature = "native")]
     fn the_effect_can_be_renamed() {
         let (mut shell, id) = two_path_shell();
         shell.apply_filter_preset(id, FILTER_FAMILIES[0].1[0]);
@@ -7860,6 +7737,7 @@ mod tests {
     /// convolution kernel's count must match its sides, and the
     /// motion blur's kind must be one the dom knows.
     #[test]
+    #[cfg(feature = "native")]
     fn the_bake_verbs_carry_the_dom_payloads() {
         let (mut shell, _id) = two_path_shell();
         shell.convolve_selection(3, 3, &[0, 0, 0, 0], false);
@@ -7929,6 +7807,7 @@ mod tests {
     /// image follows `mask.moveBy`, and the content it hides follows
     /// `mask.moveContentsBy`.
     #[test]
+    #[cfg(feature = "native")]
     fn the_mask_nudges_move_the_mask_and_the_content() {
         let (mut shell, id) = masked_shell("reveal all");
         let facts = shell.mask_facts(id).expect("the selection carries a mask");
@@ -7966,6 +7845,7 @@ mod tests {
     /// The mask converts between CS6's raster and vector forms, and
     /// the conversion rewrites the mask child and the group's kind.
     #[test]
+    #[cfg(feature = "native")]
     fn the_mask_converts_between_raster_and_vector() {
         let (mut shell, id) = masked_shell("reveal all");
         shell.mask_set_mode(id, "mask to path");
@@ -7978,6 +7858,7 @@ mod tests {
 
     /// The mask's own fill and stroke can be hidden and shown again.
     #[test]
+    #[cfg(feature = "native")]
     fn the_mask_attributes_can_be_hidden_and_shown() {
         let (mut shell, id) = masked_shell("reveal all");
         shell.mask_set_show_attrs(id, false);
@@ -7995,6 +7876,7 @@ mod tests {
     /// content it was hiding appears. Retyping without the renderer
     /// following would be a field that engages and changes nothing.
     #[test]
+    #[cfg(feature = "native")]
     fn the_mask_panel_row_makes_the_mask_group_plain() {
         let (mut shell, id) = masked_shell("hide all");
         let facts = shell.mask_facts(id).expect("the selection carries a mask");
@@ -8071,6 +7953,7 @@ mod tests {
     /// master's own layer list grows through the engine, and clearing
     /// the master hands the page back.
     #[test]
+    #[cfg(feature = "native")]
     fn the_pages_panel_marks_the_master_page() {
         let mut shell = gui_shell(gui_editor());
         shell.set_master_page(0);
@@ -8102,6 +7985,7 @@ mod tests {
     /// can detach its own copy, and unsharing gives the pages their
     /// own layers again.
     #[test]
+    #[cfg(feature = "native")]
     fn the_layers_panel_shares_layers() {
         let mut shell = gui_shell(gui_editor());
         shell
@@ -8181,6 +8065,7 @@ mod tests {
     /// and the source rectangle travel through the engine's primitive
     /// commands.
     #[test]
+    #[cfg(feature = "native")]
     fn the_properties_panel_rounds_a_rectangle() {
         let mut shell = gui_shell(gui_editor());
         let id = shell.editor.current_cell().unwrap().elements[0];
@@ -8210,6 +8095,7 @@ mod tests {
     /// The Properties panel's pixel-mask section: the mask is set,
     /// moved, and cleared over the bitmap.
     #[test]
+    #[cfg(feature = "native")]
     fn the_bitmap_panel_moves_the_pixel_mask() {
         let mut shell = gui_shell(gui_editor());
         shell
@@ -8258,6 +8144,7 @@ mod tests {
     /// The Fill & Stroke panel's pattern section: an image in the
     /// document becomes the selection's repeating fill.
     #[test]
+    #[cfg(feature = "native")]
     fn the_fill_panel_applies_a_pattern() {
         let mut shell = gui_shell(gui_editor());
         shell
@@ -8296,6 +8183,7 @@ mod tests {
     /// The Slices panel's editors: the web object's rectangle moves,
     /// and its background knobs carry their own fields.
     #[test]
+    #[cfg(feature = "native")]
     fn the_slices_panel_edits_the_web_object() {
         let mut shell = gui_shell(gui_editor());
         shell
@@ -8354,6 +8242,7 @@ mod tests {
     /// The Slices panel's "Selection → hotspot": the selection becomes
     /// a web object of its own.
     #[test]
+    #[cfg(feature = "native")]
     fn the_slices_panel_makes_a_web_object_from_the_selection() {
         let mut shell = gui_shell(gui_editor());
         let id = shell.editor.current_cell().unwrap().elements[0];
@@ -8382,6 +8271,7 @@ mod tests {
     /// typed name takes the selection's appearance, and a name with no
     /// style is refused rather than creating one.
     #[test]
+    #[cfg(feature = "native")]
     fn the_styles_panel_updates_a_named_style() {
         let mut shell = gui_shell(gui_editor());
         let id = shell.editor.current_cell().unwrap().elements[0];
@@ -8427,6 +8317,7 @@ mod tests {
     /// The Properties panel's channel section: the clipboard's channel
     /// lands in the image's own.
     #[test]
+    #[cfg(feature = "native")]
     fn the_properties_panel_pastes_a_channel() {
         let mut shell = gui_shell(gui_editor());
         // A source bitmap, opaque.
@@ -8641,4 +8532,95 @@ mod tests {
             "the click leaves the path alone",
         );
     }
+}
+#[cfg(not(feature = "native"))]
+mod stubs {
+    pub(super) struct StubDialogs;
+    impl Default for StubDialogs {
+        fn default() -> Self {
+            Self
+        }
+    }
+    impl engine::platform::Dialogs for StubDialogs {
+        fn open_path(&self, _title: &str, _filters: &[(String, Vec<String>)]) -> Option<String> {
+            None
+        }
+        fn save_path(
+            &self,
+            _title: &str,
+            _suggested: &str,
+            _filters: &[(String, Vec<String>)],
+        ) -> Option<String> {
+            None
+        }
+        fn message(&self, _title: &str, _text: &str) {}
+        fn open_url(&self, _url: &str) -> bool {
+            false
+        }
+    }
+}
+
+#[cfg(not(feature = "native"))]
+impl Shell {
+    pub(super) fn open_document(&mut self) {
+        self.status = "open".into();
+    }
+    pub(super) fn save_document(&mut self) {
+        self.status = "save".into();
+    }
+    pub(super) fn save_document_as(&mut self, _path: &str) {
+        self.status = "save".into();
+    }
+    pub(super) fn import_raster_dialog(&mut self) {
+        self.status = "import".into();
+    }
+    pub(super) fn export_dialog_ui(&mut self, _ui: &egui::Ui) {}
+    pub(super) fn canvas_size_dialog_ui(&mut self, _ui: &egui::Ui) {}
+    pub(super) fn canvas_color_dialog_ui(&mut self, _ui: &egui::Ui) {}
+    pub(super) fn image_size_dialog_ui(&mut self, _ui: &egui::Ui) {}
+    pub(super) fn feather_dialog_ui(&mut self, _ui: &egui::Ui) {}
+    pub(super) fn numeric_transform_dialog_ui(&mut self, _ui: &egui::Ui) {}
+    pub(super) fn scale_to_dialog_ui(&mut self, _ui: &egui::Ui) {}
+    pub(super) fn confirm_dialog_ui(&mut self, _ui: &egui::Ui) {}
+    pub(super) fn html_preview_panel(&mut self, _ui: &egui::Ui) {}
+    pub(super) fn file_info_summary(&self) -> String {
+        "none".into()
+    }
+    pub(super) fn place_raster_into_document(
+        &mut self,
+        _bytes: &[u8],
+        _name: &str,
+    ) -> Result<(), engine::EngineError> {
+        Err(engine::EngineError::InvalidState {
+            name: "import".into(),
+            detail: "not available".into(),
+        })
+    }
+    pub(super) fn open_raster_document(
+        &mut self,
+        _bytes: &[u8],
+        _name: &str,
+    ) -> Result<(), engine::EngineError> {
+        Err(engine::EngineError::InvalidState {
+            name: "import".into(),
+            detail: "not available".into(),
+        })
+    }
+    pub(super) fn open_extension_manager(&mut self) {}
+    pub(super) fn run_command(&mut self, _name: &str, _payload: serde_json::Value) -> bool {
+        false
+    }
+    pub(super) fn save_steps(&mut self) {}
+    pub(super) fn replay_steps(&mut self) {}
+    pub(super) fn revert_document(&mut self) {}
+    pub(super) fn png_format_summary(&self) -> String {
+        "png".into()
+    }
+    pub(super) fn web_panel(&mut self, _ui: &egui::Ui) {}
+    pub(super) fn activate_tab(&mut self, _tab: usize) {}
+    pub(super) fn document_has_content(&self) -> bool {
+        false
+    }
+    pub(super) fn run_sel(&mut self, _sel: menus::SelAction) {}
+    pub(super) fn preview_in_browser(&mut self, _secondary: bool, _all_pages: bool) {}
 }

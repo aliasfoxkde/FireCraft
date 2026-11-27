@@ -25,10 +25,11 @@
 //! (the scoreboard ratchet: measure S2–S8/S12 from the tree and fail
 //! when a metric moves the wrong way against the last recorded row),
 //! `panel-snapshot` (the CS6 panel inventory, against a committed
-//! golden), `icon-survey` (the shipped icon set's sources, licences,
-//! attribution rows, and measured bundle cost),
-//! `dist --manifest` / `dist --verify-manifest` (the
-//! machine-readable release manifest and its verification).
+//! golden), `dist --manifest` / `dist --verify-manifest` (the
+//! machine-readable release manifest and its verification),
+//! `dist --provenance` / `dist --verify-provenance` (the in-toto
+//! provenance statement that binds every published artifact's digest to
+//! the source revision, and its verification).
 //! Diagnostics go to stderr; stdout stays clean so output can
 //! be piped.
 
@@ -48,6 +49,7 @@ mod layers;
 mod library;
 mod panelsnapshot;
 mod perf;
+mod provenance;
 mod reachability;
 mod scripts;
 mod shortcuts;
@@ -62,7 +64,7 @@ mod webgolden;
 
 use std::process::ExitCode;
 
-const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|ci-no-fmt|aegis [--bless|--report]|toolchain|coverage [--bless|--measure]|layers|wasm|corpus [--report]|corpus-gen|library-gen|hero-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|--source|--sbom|--manifest|--verify-manifest|fuzz|fuzz-quick|panic-hunt|reachability [--bless|--list]|climb [--append [rung]|--check]|panel-snapshot [--bless]|icon-survey [--check]|shortcuts [--bless]|parity|scorecard|changelog [--check|--cut <version>]|stamps|stamp <version>>";
+const USAGE: &str = "usage: cargo run -p xtask -- <ci [--full]|ci-no-fmt|aegis [--bless|--report]|coverage [--bless|--measure]|layers|wasm|corpus [--report]|corpus-gen|library-gen|hero-gen|styles-gen|scripts|floor|golden [--bless]|svg-golden [--bless]|svg-roundtrip [--measure]|web-golden [--bless|--measure]|perf [--bless|--measure]|dist --web|--native|--source|--sbom|--manifest|--verify-manifest|--provenance|--verify-provenance|fuzz|fuzz-quick|panic-hunt|reachability [--bless|--list]|climb [--append [rung]|--check]|panel-snapshot [--bless]|parity|scorecard|changelog [--check|--cut <version>]|stamps|stamp <version>>";
 
 fn main() -> ExitCode {
     match std::env::args().nth(1).as_deref() {
@@ -168,6 +170,8 @@ fn main() -> ExitCode {
             Some("--sbom") => finish("dist --sbom", dist::sbom()),
             Some("--manifest") => finish("dist --manifest", dist::manifest()),
             Some("--verify-manifest") => finish("dist --verify-manifest", dist::verify_manifest()),
+            Some("--provenance") => finish("dist --provenance", provenance::generate()),
+            Some("--verify-provenance") => finish("dist --verify-provenance", provenance::verify()),
             _ => {
                 eprintln!("{USAGE}");
                 ExitCode::FAILURE
@@ -263,7 +267,13 @@ fn run_ci(full: Option<&str>, skip_fmt: bool) -> ExitCode {
                 )
             })
         }),
-        ("test", || util::cargo(&["test", "--workspace"])),
+        ("test", || {
+            // `--workspace` builds the default feature sets; `app`'s native
+            // surface (dialogs, import/export, scripting files) sits behind
+            // `feature = "native"`, so its unit tests ride this second run.
+            util::cargo(&["test", "--workspace"])
+                .and_then(|()| util::cargo(&["test", "-p", "app", "--features", "native"]))
+        }),
         ("layers", layers::run),
         ("wasm", wasm::run),
         ("corpus", corpus::run),
@@ -276,7 +286,51 @@ fn run_ci(full: Option<&str>, skip_fmt: bool) -> ExitCode {
         ("perf", perf::run),
         ("fuzz", fuzz::quick),
         ("reachability", reachability::run),
-        ("climb", climb::check),
+        ("audit", || {
+            // Fast (~2-5 s): catches dependency regressions before the test
+            // run. The report is parsed, not grepped: `cargo audit` also
+            // lists *informational* advisories (unmaintained crates, say),
+            // and a substring match would fail the gate on a crate that has
+            // no vulnerability at all. Only `vulnerabilities.count` fails.
+            if !util::has_binary("cargo-audit") {
+                return Err(
+                    "cargo-audit is not on PATH; install it with `cargo install cargo-audit \
+                     --locked` — without it the gate cannot vouch for the dependency tree"
+                        .to_owned(),
+                );
+            }
+            let out = util::run_and_capture("cargo-audit", &["audit", "--json"])?;
+            let start = out
+                .find('{')
+                .ok_or("cargo audit: no JSON report on stdout")?;
+            let end = out.rfind('}').ok_or("cargo audit: truncated JSON report")?;
+            let report: serde_json::Value = serde_json::from_str(&out[start..=end])
+                .map_err(|error| format!("cargo audit: unreadable report: {error}"))?;
+            let count = report["vulnerabilities"]["count"].as_u64().unwrap_or(0);
+            if count > 0 {
+                let ids: Vec<&str> = report["vulnerabilities"]["list"]
+                    .as_array()
+                    .map(|list| {
+                        list.iter()
+                            .filter_map(|v| v["advisory"]["id"].as_str())
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                return Err(format!(
+                    "cargo audit: {count} vulnerability(ies): {}",
+                    ids.join(", ")
+                ));
+            }
+            // Warnings are informational here (unmaintained, unsound-but-
+            // not-a-vuln); they are reported so they do not rot unseen.
+            let warnings = report["warnings"].as_object().map_or(0, |w| w.len());
+            if warnings > 0 {
+                eprintln!(
+                    "[xtask] audit: {warnings} informational advisory group(s); no vulnerabilities"
+                );
+            }
+            Ok(())
+        }),
         ("panel-snapshot", panelsnapshot::run),
         ("icon-survey", iconsurvey::check),
         ("shortcuts", shortcuts::run),

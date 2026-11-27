@@ -44,3 +44,7 @@ lcov.info
 
 # Python bytecode from the offline pipeline validator
 __pycache__/
+
+# npm installs + Playwright artifacts from the CDN/deploy scratch (generated, never tracked)
+node_modules/
+/test-results/

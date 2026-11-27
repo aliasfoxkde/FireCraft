@@ -1,0 +1,26 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "tiny-text",
+        "value": "*",
+        "files": [
+          "site/extensions.html"
+        ],
+        "createdAt": "2026-11-26T17:14:19.890Z",
+        "reason": "Codex: false positive for this branch; impeccable context reports site/extensions.html does not exist and git tree contains no such page"
+      },
+      {
+        "rule": "kicker-above-heading",
+        "value": "*",
+        "files": [
+          "site/extensions.html"
+        ],
+        "createdAt": "2026-11-26T17:14:19.899Z",
+        "reason": "Codex: false positive for this branch; impeccable context reports site/extensions.html does not exist and git tree contains no such page"
+      }
+    ]
+  }
+}

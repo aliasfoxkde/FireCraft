@@ -1,8 +1,8 @@
-# Creative-app benchmark: Krita, Photopea, and Pixlr
+# Creative-app benchmark: Krita, Photopea, Pixlr, and Graphite
 
 > **Purpose:** identify product patterns worth independently implementing in FireCraft.
 > **Status:** research and product guidance, not a claim that any benchmarked capability exists in FireCraft.
-> **Reviewed:** 2026-11-23.
+> **Reviewed:** 2026-11-26. Graphite is covered in the companion [Graphite product benchmark](graphite-product-benchmark.md); this note remains the cross-product synthesis.
 > **Related:** [Post-MVP Product and Engineering Roadmap](../POST-MVP-ROADMAP.md), [Marketing Site Roadmap](../MARKETING-SITE-ROADMAP.md).
 
 ## 1. Executive assessment
@@ -12,6 +12,7 @@ These products are useful references because they excel in different parts of th
 - **Krita** is the strongest reference for professional painting, brush dynamics, stylus/tablet input, resource management, and color-managed artistic work.
 - **Photopea** is the strongest reference for browser-native layered image editing, broad file interoperability, non-destructive object/filter concepts, and scriptable host integration.
 - **Pixlr** is the strongest reference for approachable quick actions, guided image cleanup, low-friction editing, and optional AI-assisted transformations.
+- **Graphite** is the strongest reference for exposing a procedural, non-destructive node graph beneath a familiar layer-and-tool editor. Its current product is alpha; roadmap items must not be described as shipped.
 
 FireCraft should not become a clone of any one product. Its opportunity is to combine the parts that fit its existing strengths: vector and bitmap content in one editable document, a compact Fireworks-style workflow, reliable export, a local-first Rust engine, browser/native surfaces, and automation.
 
@@ -24,6 +25,7 @@ This benchmark is a source of product requirements and interaction ideas. It is 
 | Krita | Brush engines, pressure/tilt sensors, tablet diagnostics, popup palette, canvas-only mode, symmetry, assistants, resource tags, soft proofing | Professional brush and stylus workflows; a resource manager; touch-aware workspace; fast contextual controls; color-managed preview | Krita is GPL-3.0. Do not transplant application code or assets into the Apache-2.0 FireCraft project without an explicit licensing decision. |
 | Photopea | Browser editing, PSD/PSB and other formats, layers/masks/channels, Smart Objects, Smart Filters, scripting, embedding and messaging API | Stronger non-destructive asset workflows; format-fidelity tests; a scriptable editor host contract; browser-specific UX | Photopea is proprietary, not open source. Its public API does not make its implementation open source or grant rights to copy it. Avoid making it a required runtime dependency. |
 | Pixlr | Guided quick edits, masks/selections, background/object removal, generative fill/expand, upscaling, mobile editing | Discoverable quick actions and previewable operations; a fast path for common image tasks; optional AI adapters later | Pixlr is a proprietary service/product. Study public functionality and independently implement workflows; do not copy assets, code, UI artwork, text, or branding. |
+| Graphite | Hybrid layer/node editing, procedural vector design, visible operation graphs, early raster compositing and alpha-stage roadmap transparency | Explore a graph-backed, non-destructive effects workflow that complements FireCraft's layer-first CS6 feel; adopt graph interactions selectively, with progressive disclosure | Graphite's repository offers MIT or Apache-2.0 licensing unless a subdirectory states otherwise, but FireCraft's clean-room policy still governs this work. Use public behavior/docs for product research; do not copy code/assets. The editor is alpha and its own feature page distinguishes current support from roadmap. |
 
 ## 3. Krita patterns to evaluate
 
@@ -68,6 +70,12 @@ Evaluate symmetry/mirror tools, perspective and drawing assistants, rulers/guide
 
 Color management requires a defined pipeline and test profiles, not just a profile selector in the UI. Keep display preview, source profile, conversion, and export behavior distinct. Use the existing color-management workstream and architecture decision process before selecting dependencies or changing document serialization.
 
+### 3.5 Layer organization and frame-by-frame animation
+
+The current Krita manual documents layer labels and color/name filters, drag reorder and cross-document layer transfer, and non-destructive filter, transform and transparency masks. Its timeline provides keyframe holds, duplicate and clone frames, onion skin, pinned layers, multi-selection, frame color labels and context-menu actions. Krita also explicitly distinguishes this frame-by-frame animation from a full video/audio montage workflow.
+
+**FireCraft fit:** improve layer type indicators, labels/filtering, cross-document drag/drop and accessible context menus as small daily-editing increments. Keep its existing animation timeline's purpose clear; timeline editing and video/frame compositing are separate capabilities with different storage, playback, audio and export needs.
+
 ## 4. Photopea patterns to evaluate
 
 ### 4.1 Non-destructive source assets
@@ -107,6 +115,8 @@ Photopea's scripting and messaging model is a reference for an editor that can b
 
 Any host API should be versioned, permission-scoped, documented, testable, and unable to access arbitrary local files or privileged secrets without explicit user authorization.
 
+Photopea's public script documentation describes an in-app script window, document/layer objects, export to a ZIP of generated files, and calls for an embedding host to message the editor. FireCraft has analogous shared automation surfaces already, so the useful benchmark is clear command schemas, bounded outputs, generated-file handling and an explicit host boundary—not a parallel scripting API.
+
 ## 5. Pixlr patterns to evaluate
 
 ### 5.1 Quick actions and guided editing
@@ -135,6 +145,8 @@ Background segmentation, generative fill/expand, super-resolution, and layer ext
 
 Do not make AI services necessary to open, edit, save, export, or use FireCraft.
 
+The current Pixlr catalog presents quick-launch image tools alongside generative fill/expand/transform, background/object removal, denoise/upscale, and layer extraction. Its site names external model families and separates free and paid offerings. Treat this as a changing commercial catalog: FireCraft should expose providers, costs, network transfer and privacy choices plainly, and avoid assuming a particular service or model remains available.
+
 ## 6. Recommended FireCraft priority
 
 | Priority | Work | Rationale |
@@ -146,6 +158,8 @@ Do not make AI services necessary to open, edit, save, export, or use FireCraft.
 | P2 | Quick Actions and guided workflows over existing commands | Improves discoverability without creating a second editing engine. |
 | P3 | Optional local/provider-backed AI segmentation, fill, expansion, upscaling, and layer extraction | Potentially useful, but requires separate privacy, performance, licensing, and provider decisions. |
 | Research | Android/tablet/mobile packaging and adaptive shell | Use actual device/browser test evidence; do not equate upstream app availability with FireCraft platform readiness. |
+
+Graphite specifically adds a research candidate: a small node-graph spike for a bounded, already-supported adjustment/filter workflow. It should sit behind the familiar layer/property controls and serialize through FireCraft's existing document authority. Do not replace the layer stack or migrate the whole document to a procedural graph based on Graphite's alpha direction; the detailed comparison and gates are in the [Graphite benchmark](graphite-product-benchmark.md).
 
 This table is a prioritization proposal only. The baseline audit determines whether any item is already implemented or in progress.
 
@@ -162,8 +176,10 @@ This table is a prioritization proposal only. The baseline audit determines whet
 
 ### Krita
 
-- [Krita source repository and license](https://github.com/KDE/krita)
+- [Krita source repository and license](https://github.com/KDE/krita) (GitHub mirror of the KDE repository; GPL-3.0 application license)
 - [Krita Brush Engines manual](https://docs.krita.org/en/reference_manual/brushes/brush_engines.html)
+- [Krita Layers and Masks manual](https://docs.krita.org/en/user_manual/layers_and_masks.html)
+- [Krita Animation Timeline manual](https://docs.krita.org/en/reference_manual/dockers/animation_timeline.html)
 - [Krita Tablet Settings](https://docs.krita.org/en/reference_manual/preferences/tablet_settings.html)
 - [Krita Popup Palette](https://docs.krita.org/en/reference_manual/popup_palette.html)
 - [Krita Canvas-Only Mode](https://docs.krita.org/en/reference_manual/canvas_only_mode.html)

@@ -56,14 +56,17 @@ rm -rf "${STAGE}"
 mkdir -p "${STAGE}/usr/bin" \
          "${STAGE}/usr/share/applications" \
          "${STAGE}/usr/share/doc/firecraft"
-install -m 755 target/release/firecraft     "${STAGE}/usr/bin/firecraft"
-install -m 755 target/release/firecraft-cli "${STAGE}/usr/bin/firecraft-cli"
+readonly TARGET_DIR="${CARGO_TARGET_DIR:-target}"
+install -m 755 "${TARGET_DIR}/release/firecraft"     "${STAGE}/usr/bin/firecraft"
+install -m 755 "${TARGET_DIR}/release/firecraft-cli" "${STAGE}/usr/bin/firecraft-cli"
 install -m 644 "${DESKTOP_SOURCE}" \
     "${STAGE}/usr/share/applications/firecraft.desktop"
 {
-    echo "FireCraft ${VERSION} is dual-licensed MIT OR Apache-2.0."
+    echo "FireCraft ${VERSION} is licensed under the Apache License, Version 2.0."
     echo
     cat LICENSE
+    echo
+    cat NOTICE
 } > "${STAGE}/usr/share/doc/firecraft/copyright"
 mkdir -p "${STAGE}/usr/share/icons/hicolor/256x256/apps"
 install -m 644 "${ICON_SOURCE}" \

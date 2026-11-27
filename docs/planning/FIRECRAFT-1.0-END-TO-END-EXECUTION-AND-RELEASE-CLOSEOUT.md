@@ -89,9 +89,9 @@ Use it as a model for breadth, asset naming, user download ergonomics, release a
 
 The owner identifies this directory as a key UI source:
 
-**/nas/Temp/repo/FireCraft-CraftAnything-Experiment**
+**/nas/Temp/repos/FireCraft-CraftAnything-Experiment**
 
-This path was not mounted in the environment used to prepare this document. Its contents have **not** been inspected or validated here. The agent must inspect it on the owner's development machine where the directory is available. Do not report this task complete merely because the path is referenced.
+At plan preparation (2026-11-26), the path was unavailable. On 2026-11-27 it was available and the current `main`/v0.3.5 source, release evidence, architecture seams, and UI behavior limits were reviewed. The PR #189 integration is present in the current release lineage. That establishes the current product baseline; it does not prove every experiment-only asset or commit has been reconciled. Complete the artifact-by-artifact comparison below before archiving any experiment branch or worktree. The [dated audit](https://github.com/aliasfoxkde/FireCraft-CraftAnything-Experiment/blob/docs/post-v035-audit/docs/AUDIT-2026-11-27.md) and [task ledger](https://github.com/aliasfoxkde/FireCraft-CraftAnything-Experiment/blob/docs/post-v035-audit/docs/TASKS.md) in the canonical repository record the verified release and remaining review limits.
 
 Run and record:
 - Test that the directory exists.
@@ -104,7 +104,7 @@ Run and record:
 
 **Preservation rules:** begin read-only; do not run destructive cleanup, reset, stash-pop, overwrite, rebase or force-push in the experiment repository. Create a verified backup/reference before importing. Preserve the experiment until the integrated product is validated and the owner approves archival. Follow FireCraft clean-room/IP rules: no Adobe source, application artwork, proprietary icons/fonts or restricted material enters the repo.
 
-If the path is inaccessible to the implementation agent, report the blocker and request an accessible mount or owner-provided archive. Do not invent its content or silently skip it.
+If the path becomes inaccessible, report the blocker and request an accessible mount or owner-provided archive. Do not invent its content or silently skip it.
 
 ### 2.2 FireCraft repository inventory
 

@@ -1,16 +1,12 @@
 # FireCraft — Roadmap detail
 
-> **Current execution snapshot (2026-11-16; main `23f872e0`):** Phase 21's
-> user-facing deliverables have landed. Phase 20.1 and 20.5–20.7 are on
-> main; Optimize/timeline landed 2026-11-11 in #118 and the mask stack
-> landed in #113 as `PARTIAL`. The reachability wave (#143), the
-> artwork consolidation (#144) and the wave-2 closeout (#150) merged
-> 2026-11-14 → 11-16: **257/257 commands bound = 100%, floor
-> re-blessed to 100%**. Phase 22 remains partial: the
-> user-visible parity matrix is published, but bitmap inspector
-> capabilities and remaining CS6 chrome are still open/evidence-gated.
-> Use [TASKS.md](TASKS.md) for live status and [PROGRESS.md](PROGRESS.md)
-> for measured receipts. An open PR is not a landed feature.
+> **Current execution snapshot (2026-11-26; `integration/firecraft-1.0` PR #189):**
+> FireCraft's 17-crate core engine (**257/257 commands bound = 100%**) is now paired
+> with the extracted CS6 Studio UI chrome (`theme.rs`, `vector_icons.rs`, `chrome.rs`,
+> `demo.rs`, `welcome_overlay.rs`, stacked right panel groups + Iconic Mode, and 7 real
+> panels replacing stubs). See [PLAN.md](PLAN.md), [TASKS.md](TASKS.md), and
+> [docs/integration/2026-11-26-code-ui-audit.md](integration/2026-11-26-code-ui-audit.md).
+> An open PR is not a landed feature until CI, visual proof, and maintainer merge land.
 
 > Current task state is tracked in [`TASKS.md`](TASKS.md), with a dated
 > snapshot in [`PROGRESS.md`](PROGRESS.md). This file is the detailed

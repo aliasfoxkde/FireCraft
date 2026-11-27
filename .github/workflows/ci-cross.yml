@@ -1,0 +1,56 @@
+# Cross-platform CI: builds native binaries on macOS and Windows runners.
+# Linux x86_64 is covered by ci.yml (ubuntu-latest).
+# This workflow runs on every PR/push to main and on tag pushes.
+
+name: CI (cross-platform)
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # macOS — build native binary and run lib tests
+  macos:
+    name: macOS (aarch64-apple-darwin)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: 1.99.1
+      - name: Cache cargo
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cargo/registry/index/
+          key: macos-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - name: Build
+        run: cargo build --release --quiet
+      - name: Run lib tests
+        run: cargo test --lib --quiet 2>&1
+
+  # Windows — build native binary and run lib tests
+  windows:
+    name: Windows (x86_64-pc-windows-msvc)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: 1.99.1
+      - name: Cache cargo
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cargo/registry/index/
+          key: windows-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - name: Build
+        run: cargo build --release --quiet
+      - name: Run lib tests
+        run: cargo test --lib --quiet 2>&1

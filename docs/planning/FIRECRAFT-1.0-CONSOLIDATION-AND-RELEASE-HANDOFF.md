@@ -747,7 +747,7 @@ Final handoff must mark each workstream Done/Partial/Blocked/Deferred and includ
 
 The phase-by-phase execution sequence, local experiment inspection instructions, full Windows/macOS/Linux/WASM release matrix, PhotoCraft benchmark, README/wiki refactor, GitHub issue/PR/branch audit, target-native packaging receipts, draft-first release publication and final 1.0 closeout are now specified in [FIRECRAFT-1.0-END-TO-END-EXECUTION-AND-RELEASE-CLOSEOUT.md](FIRECRAFT-1.0-END-TO-END-EXECUTION-AND-RELEASE-CLOSEOUT.md).
 
-**Important owner input:** inspect /nas/Temp/repo/FireCraft-CraftAnything-Experiment on the owner's machine. That path was not mounted in the environment used to author the documentation; the experiment has not been inspected here. The agent must inventory it before importing or discarding UI work.
+**Experiment audit status (2026-11-27):** the canonical repository at `/nas/Temp/repos/FireCraft-CraftAnything-Experiment` is now available. The v0.3.5 release source and PR #189 integration were reviewed, and current architecture, coverage, Aegis, and WebGL limits are recorded in the linked audit/task ledger. This does not establish that every experiment-only branch, asset, or commit has been reconciled; finish the inventory before archiving experiment work.
 
 The expanded owner-requested release scope must be reconciled formally with accepted decision 0075 and RPM deferral decision 0070. Do not silently override repository decisions or mark any platform/package supported without target-native evidence.
 

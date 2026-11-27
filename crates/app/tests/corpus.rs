@@ -4,6 +4,7 @@
 //! and its journal must replay to the same document the apply loop
 //! produced (surface equivalence).
 
+#![cfg(feature = "native")]
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use app::editor::{Editor, Tool};
@@ -18,6 +19,7 @@ fn fixture(name: &str) -> Vec<u8> {
     std::fs::read(&path).unwrap_or_else(|e| panic!("read {path}: {e}"))
 }
 
+#[cfg(feature = "native")]
 #[test]
 fn open_fixture_edit_save_round_trips() {
     let mut editor = Editor::open(&fixture("composed.fw.png")).unwrap();
