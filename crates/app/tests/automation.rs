@@ -61,7 +61,7 @@ fn one_command_id_through_gui_cli_and_mcp() {
     let mut via_mcp = Session::new(base);
     let reply = mcp::handle(
         &mut via_mcp,
-        mcp_fs(),
+        &mcp_fs(),
         &serde_json::json!({
             "jsonrpc": "2.0",
             "id": 7,
@@ -154,7 +154,7 @@ fn web_command_ids_through_gui_cli_and_mcp() {
     for (command, args) in [("slice.create", &create), ("slice.setLink", &link)] {
         let reply = mcp::handle(
             &mut via_mcp,
-            mcp_fs(),
+            &mcp_fs(),
             &serde_json::json!({
                 "jsonrpc": "2.0",
                 "id": 9,
@@ -190,7 +190,7 @@ fn mcp_handshake_and_tool_table() {
 
     let init = mcp::handle(
         &mut session,
-        fs.clone(),
+        &fs,
         &serde_json::json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -209,14 +209,14 @@ fn mcp_handshake_and_tool_table() {
     // The client's initialized notification takes no reply at all.
     let notified = mcp::handle(
         &mut session,
-        fs.clone(),
+        &fs,
         &serde_json::json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }),
     );
     assert!(notified.is_none(), "notifications take no reply");
 
     let ping = mcp::handle(
         &mut session,
-        fs.clone(),
+        &fs,
         &serde_json::json!({ "jsonrpc": "2.0", "id": 2, "method": "ping" }),
     )
     .expect("ping answers");
@@ -224,7 +224,7 @@ fn mcp_handshake_and_tool_table() {
 
     let tools = mcp::handle(
         &mut session,
-        fs,
+        &fs,
         &serde_json::json!({ "jsonrpc": "2.0", "id": 3, "method": "tools/list" }),
     )
     .expect("tools/list answers");
@@ -298,7 +298,7 @@ fn hostile_json_is_typed_never_panic() {
     ]);
     let mut via_mcp = Session::new(doc::Document::default());
     for request in &protocol {
-        if let Some(reply) = mcp::handle(&mut via_mcp, fs.clone(), request) {
+        if let Some(reply) = mcp::handle(&mut via_mcp, &fs, request) {
             assert_eq!(reply["jsonrpc"], "2.0", "mcp {request}: {reply}");
             let well_formed = reply["error"].is_object() ^ reply["result"].is_object();
             assert!(well_formed, "mcp {request}: {reply}");
@@ -323,12 +323,12 @@ fn hostile_json_is_typed_never_panic() {
 fn mcp_expanded_tools_and_resource() {
     let base = Editor::untitled().session.document().clone();
     let mut session = Session::new(base);
-    let fs = Rc::new(MemoryFs::new());
+    let fs: Rc<dyn FileSystem> = Rc::new(MemoryFs::new());
 
     let call = |session: &mut Session, name: &str, arguments: serde_json::Value| {
         mcp::handle(
             session,
-            Rc::new(MemoryFs::new()) as Rc<dyn FileSystem>,
+            &(Rc::new(MemoryFs::new()) as Rc<dyn FileSystem>),
             &serde_json::json!({
                 "jsonrpc": "2.0", "id": 1, "method": "tools/call",
                 "params": { "name": name, "arguments": arguments },
@@ -402,7 +402,7 @@ fn mcp_expanded_tools_and_resource() {
     let export_fs: Rc<dyn FileSystem> = Rc::new(MemoryFs::new());
     let reply = mcp::handle(
         &mut session,
-        export_fs.clone(),
+        &export_fs,
         &serde_json::json!({
             "jsonrpc": "2.0", "id": 2, "method": "tools/call",
             "params": { "name": "firecraft.export",
@@ -429,7 +429,7 @@ fn mcp_expanded_tools_and_resource() {
     // The resource: document://current reads back the same summary.
     let resources = mcp::handle(
         &mut session,
-        fs,
+        &fs,
         &serde_json::json!({ "jsonrpc": "2.0", "id": 3, "method": "resources/list" }),
     )
     .expect("resources/list answers");
@@ -439,7 +439,7 @@ fn mcp_expanded_tools_and_resource() {
     );
     let read = mcp::handle(
         &mut session,
-        Rc::new(MemoryFs::new()) as Rc<dyn FileSystem>,
+        &fs,
         &serde_json::json!({
             "jsonrpc": "2.0", "id": 4, "method": "resources/read",
             "params": { "uri": "document://current" },
@@ -456,7 +456,7 @@ fn mcp_expanded_tools_and_resource() {
     // Unknown resources are typed errors.
     let read = mcp::handle(
         &mut session,
-        Rc::new(MemoryFs::new()) as Rc<dyn FileSystem>,
+        &fs,
         &serde_json::json!({
             "jsonrpc": "2.0", "id": 5, "method": "resources/read",
             "params": { "uri": "document://nope" },

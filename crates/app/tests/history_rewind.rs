@@ -110,7 +110,7 @@ fn the_mcp_surface_lists_and_runs_the_rewind() {
     let call = |session: &mut Session, name: &str, arguments: serde_json::Value| {
         mcp::handle(
             session,
-            Rc::new(MemoryFs::new()) as Rc<dyn FileSystem>,
+            &(Rc::new(MemoryFs::new()) as Rc<dyn FileSystem>),
             &serde_json::json!({
                 "jsonrpc": "2.0", "id": 1, "method": "tools/call",
                 "params": { "name": name, "arguments": arguments },
