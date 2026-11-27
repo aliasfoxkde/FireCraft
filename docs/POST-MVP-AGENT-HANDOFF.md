@@ -316,3 +316,14 @@ The handoff is successful when another agent can select the first approved ticke
 - Losing user data or privacy boundaries.
 
 The strategic roadmap defines the direction. The audit defines the truth. The task tickets define the work. The evidence defines completion.
+
+
+---
+
+## 12. FireCraft 1.0 and website launch coordination
+
+Before executing broad post-MVP work, read the [FireCraft 1.0 Consolidation and Release Handoff](planning/FIRECRAFT-1.0-CONSOLIDATION-AND-RELEASE-HANDOFF.md), [Product Expansion Roadmap](planning/FIRECRAFT-PRODUCT-ROADMAP-AND-EXPANSION.md), and [Marketing Site Roadmap](MARKETING-SITE-ROADMAP.md). The website is now an explicit 1.0 launch deliverable, not a separate optional marketing task.
+
+Audit and complete the existing `site/` implementation and deploy it to its dedicated Cloudflare Pages project. Keep it separate from the browser editor's `dist/web` output and Pages project. Revalidate historical project names, current deployments, workflows, domains, and credentials before changing configuration.
+
+Do not copy strategic features wholesale into the active task list. Audit source and existing tickets, reconcile overlaps, then create bounded owner-approved tasks in `TASKS.md` with acceptance criteria and verification. The product expansion roadmap is not a substitute for evidence or a live task ledger.

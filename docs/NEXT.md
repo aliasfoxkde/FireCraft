@@ -881,3 +881,21 @@ scope, so no license path is attempted.
 | Coverage floors | 81.1% lines / 78.7% functions (rising-only; `xtask/src/coverage.rs`) |
 | CI image | `firecraft-ci-rust:1` — rebuild + re-ship when ANY lockfile moves |
 | GitForge API | 127.0.0.1:42780, bearer via `~/.config/gitforge/mkinney-credentials.env` |
+
+
+---
+
+## FireCraft 1.0 launch and strategic product expansion
+
+The cross-cutting 1.0 execution plan is [FIRECRAFT-1.0-CONSOLIDATION-AND-RELEASE-HANDOFF.md](planning/FIRECRAFT-1.0-CONSOLIDATION-AND-RELEASE-HANDOFF.md). The longer-range product horizons and missing workstreams are in [FIRECRAFT-PRODUCT-ROADMAP-AND-EXPANSION.md](planning/FIRECRAFT-PRODUCT-ROADMAP-AND-EXPANSION.md). The existing [MARKETING-SITE-ROADMAP.md](MARKETING-SITE-ROADMAP.md) is now an explicit 1.0 launch workstream, including deployment to the dedicated Cloudflare Pages marketing project, separate from the WASM editor project.
+
+These are planning references, not evidence that work has landed. Promote approved, bounded tasks into [TASKS.md](TASKS.md) only after the current source/worktree audit and dependency review. Keep the task board as the sole live ledger.
+
+
+---
+
+## Expanded 1.0 launch execution
+
+Use [FIRECRAFT-1.0-END-TO-END-EXECUTION-AND-RELEASE-CLOSEOUT.md](planning/FIRECRAFT-1.0-END-TO-END-EXECUTION-AND-RELEASE-CLOSEOUT.md) for the complete phased work order: experiment audit, PR/worktree consolidation, UI polish, marketing site, README/wiki, full native/WASM packaging, GitHub release publication, issue/PR cleanup, feedback intake and external certification.
+
+This is a scope/acceptance reference, not a live status claim. Reconcile the requested full platform matrix with decisions 0075/0070 and update TASKS only after an evidence-based owner-approved sequence is established.

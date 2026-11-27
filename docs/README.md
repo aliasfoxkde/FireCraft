@@ -76,3 +76,22 @@ This page is the documentation map. Start with the overview that matches your go
 - `docs/SESSIONS.md` and `docs/HISTORY.md` are historical. Do not infer current work from an old entry.
 - `docs/planning/generated/` is generated output; use its generator rather than editing derived counts by hand.
 - `source/` and Adobe-derived local extracts are reference-only and must never be committed.
+
+
+### FireCraft 1.0 launch and product expansion
+
+1. [1.0 Consolidation, MVP, Community Feedback, and Release Handoff](planning/FIRECRAFT-1.0-CONSOLIDATION-AND-RELEASE-HANDOFF.md): integration, MVP scope, in-app feedback, staging, release, marketing-site launch gate, documentation synchronization, and agent execution order.
+2. [Product Expansion Roadmap](planning/FIRECRAFT-PRODUCT-ROADMAP-AND-EXPANSION.md): staged 1.0/1.x/2.x feature horizons and cross-cutting quality, security, accessibility, data-integrity, ecosystem, and collaboration scope.
+3. [Marketing Site Roadmap](MARKETING-SITE-ROADMAP.md): existing `site/` audit, landing-page content, Cloudflare Pages separation, deployment gates, accessibility, SEO, and launch acceptance.
+
+These plans are proposals until approved. `TASKS.md` remains the only live task ledger; speculative roadmap items must not be bulk-added as active work.
+
+
+### Expanded FireCraft 1.0 execution and release closeout
+
+1. [End-to-End Execution, Distribution, Documentation, and GitHub Closeout Plan](planning/FIRECRAFT-1.0-END-TO-END-EXECUTION-AND-RELEASE-CLOSEOUT.md): phase 0 through final 1.0 publication, local CraftAnything experiment audit, complete Windows/macOS/Linux/WASM package matrix, README/wiki refactor, full issue/PR cleanup and release certification.
+2. [1.0 Consolidation and Release Handoff](planning/FIRECRAFT-1.0-CONSOLIDATION-AND-RELEASE-HANDOFF.md): product-level MVP and feedback loop.
+3. [Product Expansion Roadmap](planning/FIRECRAFT-PRODUCT-ROADMAP-AND-EXPANSION.md): longer-term feature horizons.
+4. [Marketing Site Roadmap](MARKETING-SITE-ROADMAP.md): public landing page and separate Cloudflare Pages deployment.
+
+The end-to-end plan is the phase/workstream reference. TASKS.md continues to be the only live task ledger.

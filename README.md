@@ -168,6 +168,9 @@ The GUI and automation interfaces are intended to drive the same engine commands
 | [Doc index](docs/README.md) | The full documentation map |
 | [Releasing](docs/RELEASING.md) | Artifact build and deployment procedures |
 | [Marketing site roadmap](docs/MARKETING-SITE-ROADMAP.md) | Public website scope, Cloudflare Pages deployment, and launch gates |
+| [FireCraft 1.0 consolidation and release handoff](docs/planning/FIRECRAFT-1.0-CONSOLIDATION-AND-RELEASE-HANDOFF.md) | MVP integration, feedback, marketing launch, staging, and release execution |
+| [End-to-end 1.0 execution and release closeout](docs/planning/FIRECRAFT-1.0-END-TO-END-EXECUTION-AND-RELEASE-CLOSEOUT.md) | Phase gates from repository audit through platform validation and release closeout |
+| [Product expansion roadmap](docs/planning/FIRECRAFT-PRODUCT-ROADMAP-AND-EXPANSION.md) | Future feature horizons and cross-cutting product quality strategy |
 | [Creative-app benchmark](docs/research/creative-app-benchmark.md) | Cross-product synthesis from Krita, Photopea, Pixlr, and Graphite |
 | [Graphite product benchmark](docs/research/graphite-product-benchmark.md) | Graphite's current alpha, procedural layer/node approach, transferable ideas, and FireCraft fit |
 | [Progress](docs/PROGRESS.md) | Session-level status and historical progress |
@@ -194,3 +197,10 @@ Third-party assets must retain their license notices and be recorded in [`docs/A
 ## License
 
 Licensed under the [Apache License 2.0](LICENSE).
+
+
+## 1.0 launch and release planning
+
+The phase-by-phase 1.0 integration, full cross-platform release, documentation/wiki, GitHub issue closeout and publication plan is in the [End-to-End 1.0 Execution Plan](docs/planning/FIRECRAFT-1.0-END-TO-END-EXECUTION-AND-RELEASE-CLOSEOUT.md). The [1.0 Consolidation Handoff](docs/planning/FIRECRAFT-1.0-CONSOLIDATION-AND-RELEASE-HANDOFF.md) and [Product Expansion Roadmap](docs/planning/FIRECRAFT-PRODUCT-ROADMAP-AND-EXPANSION.md) provide the companion product scope.
+
+The README and download claims must be refreshed from verified release artifacts. Planned Windows/macOS/Linux package formats are not available until the corresponding target build and runtime receipts exist.

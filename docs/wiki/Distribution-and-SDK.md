@@ -43,3 +43,16 @@ Adoption is selective: confirm target compatibility, license, feature footprint 
 - [Toolchain and packaging recipes](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/TOOLCHAINS.md)
 
 Support status is per artifact: Stable, Preview/Community or Planned/Unsupported. Never infer Windows/macOS/Flatpak/Android support from a script alone.
+
+
+---
+
+## 1.0 distribution target and evidence policy
+
+The 1.0 distribution roadmap targets a ready-to-use browser/WASM bundle, Windows installer and portable ZIP, macOS universal DMG, Linux AppImage/DEB/Flatpak/tar.gz and a formally decided RPM path, plus CLI and source/integrity artifacts. Linux ARM64 and Windows ARM64 are additional architecture targets to assess. These are **targets**, not claims that every format is presently available.
+
+Use the [GitHub Releases page](https://github.com/aliasfoxkde/FireCraft/releases) as the current source for downloadable artifacts. A package is listed as supported only after it has been built from a tagged source SHA, package-inspected, installed/launched and smoke-tested on the target OS/architecture. A packaging recipe or cross-compile alone is insufficient.
+
+For the complete 1.0 matrix, install/upgrade/uninstall checks, checksums/SBOM/provenance, release process and decisions, see [the End-to-End 1.0 Execution Plan](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/planning/FIRECRAFT-1.0-END-TO-END-EXECUTION-AND-RELEASE-CLOSEOUT.md) and [the Release Engineering Plan](https://github.com/aliasfoxkde/FireCraft/blob/main/docs/RELEASE-ENGINEERING-PLAN.md).
+
+The static WASM download and hosted browser app are separate from the native desktop installers. Hosting/embed instructions remain in [Browser and WebOS](Browser-and-WebOS). The marketing site and WASM application are also separate Cloudflare Pages deployments.

@@ -347,3 +347,16 @@ Every step below is one the repository can actually perform today.
 - **Reproducibility.** A rebuild of the current tree does not reproduce
   the published bytes, and the bundler version is not recorded in any
   build receipt.
+
+
+---
+
+## Expanded 1.0 scope and final release work order
+
+The cross-workstream phase plan is [FIRECRAFT-1.0-END-TO-END-EXECUTION-AND-RELEASE-CLOSEOUT.md](planning/FIRECRAFT-1.0-END-TO-END-EXECUTION-AND-RELEASE-CLOSEOUT.md). This file remains the current command-level guide; revalidate every procedure against actual toolchains and run receipts before declaring it current.
+
+The owner-requested complete 1.0 release should target ready-to-use Web/WASM, Windows x64, macOS universal, and Linux x86_64 packages (AppImage, DEB, Flatpak, tar.gz and RPM subject to a superseding decision), with Linux ARM64 assessed, plus CLI, source, checksums, SBOM and provenance. Existing 0075 scope and 0070 RPM deferral must be reconciled in a new decision before the artifact matrix is changed. Do not infer that an existing recipe is a completed release artifact.
+
+PhotoCraft release references: [releases](https://github.com/storytold/photocraft/releases) and [releasing guide](https://github.com/storytold/photocraft/blob/main/docs/releasing.md). Use its release asset breadth and draft/sign/verify approach as a benchmark, not as code to copy.
+
+The final stable release remains draft-first and human-published. Each advertised platform/package must have a build receipt, package inspection, target install/launch/runtime test, checksum, signature/provenance state, and matching README/wiki/site instructions. Keep the marketing Pages project and WASM editor Pages project separate.

@@ -171,3 +171,16 @@ every required target, **or** when the maintainer explicitly approves a
 documented reduced support matrix in
 [decision 0075](../decisions/0075-release-scope-mvp.md). A green
 workflow with skipped targets is not completion.
+
+
+---
+
+## 1.0 scope and cross-workstream coordination addendum (2026-11-26)
+
+Use [FIRECRAFT-1.0-END-TO-END-EXECUTION-AND-RELEASE-CLOSEOUT.md](../planning/FIRECRAFT-1.0-END-TO-END-EXECUTION-AND-RELEASE-CLOSEOUT.md) as the coordinated phase plan and this T27 ticket as the technical release work package.
+
+The owner has expanded the desired release to ready-to-use Web/WASM, Windows x64, macOS universal and Linux x86_64 packages, including AppImage, DEB, Flatpak, tar.gz and an explicit RPM decision. Assess Linux ARM64 and Windows ARM64; keep Android behind its existing feasibility gate. Include native CLI, source archives, checksum manifest, SBOM, provenance/attestation, signatures where credentials are configured, and complete release notes.
+
+Before editing the canonical matrix, reconcile accepted decision 0075 and RPM deferral 0070 using a new decision record. Do not weaken existing target evidence rules: recipe, cross-build, target build, install, launch, runtime smoke, signing, publication and independent verification are separate states.
+
+This plan also coordinates the local CraftAnything experiment audit, README/wiki and site refactor, release draft/rehearsal, and final issue/PR/branch cleanup. Those workstreams do not replace target-native packaging receipts.

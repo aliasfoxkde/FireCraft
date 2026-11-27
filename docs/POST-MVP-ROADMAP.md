@@ -1689,3 +1689,14 @@ FireCraft is successful when a user can move from a blank canvas to a complete, 
 10. Share feedback, contribute improvements, and keep using the application offline without vendor lock-in.
 
 The ambition is not a bigger copy of a legacy application. It is a dependable, open, extensible creative production platform that preserves Fireworks' best ideas and makes them useful in modern workflows.
+
+
+---
+
+## FireCraft 1.0 launch and strategic roadmap alignment
+
+The cross-workstream 1.0 integration, MVP, in-app feedback, staged rollout, and release sequence is defined in [FIRECRAFT-1.0-CONSOLIDATION-AND-RELEASE-HANDOFF.md](planning/FIRECRAFT-1.0-CONSOLIDATION-AND-RELEASE-HANDOFF.md). The companion [FIRECRAFT-PRODUCT-ROADMAP-AND-EXPANSION.md](planning/FIRECRAFT-PRODUCT-ROADMAP-AND-EXPANSION.md) groups the long-range feature direction into staged horizons and adds cross-cutting quality, security, data-integrity, accessibility, support, and governance work.
+
+The existing [MARKETING-SITE-ROADMAP.md](MARKETING-SITE-ROADMAP.md) is a first-class 1.0 launch workstream: complete and deploy the current `site/` project to its dedicated Cloudflare Pages project, separate from the WASM editor deployment. Reconcile overlapping feature ideas between this roadmap and the expansion plan during ticket creation; do not maintain duplicate active backlogs.
+
+`TASKS.md` remains the sole live task ledger. This document remains strategic until work is explicitly prioritized and ticketized.
