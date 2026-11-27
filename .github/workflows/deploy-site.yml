@@ -1,4 +1,4 @@
-name: Deploy FireCraft marketing site
+name: Deploy FireCraft marketing review preview
 
 on:
   pull_request:
@@ -47,7 +47,7 @@ jobs:
           node --test tests/site-release-loader.test.mjs
 
   deploy:
-    name: Deploy Cloudflare Pages
+    name: Deploy Cloudflare Pages preview
     if: github.event_name != 'pull_request'
     needs: validate
     runs-on: ubuntu-24.04
@@ -59,4 +59,6 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy site --project-name=firecraft-site --branch=main
+          # The production branch of firecraft-web serves the WASM application.
+          # Keep marketing on a stable, non-production preview branch.
+          command: pages deploy site --project-name=firecraft-web --branch=marketing-review

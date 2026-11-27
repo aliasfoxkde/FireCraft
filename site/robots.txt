@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://firecraft-site.pages.dev/sitemap.xml
+Sitemap: https://marketing-review.firecraft-web.pages.dev/sitemap.xml

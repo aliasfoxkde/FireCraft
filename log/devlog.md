@@ -4410,3 +4410,16 @@ Still open when this entry was written: the aegis baseline re-bless, the
 reachability floor (100.00% recorded vs. the 249/257 the last measurement
 reported), the climb board's S12 cell, the compiler pin (wasm job 1.100.0 vs
 `rust-toolchain.toml` 1.99.1), and the 109 worktrees.
+
+## 2026-11-27 — PR #190 accessibility follow-up
+- Added a failing-first regression test for the extension page mobile nav target and light-theme contrast, reproduced the missing `primary-nav` id, then fixed it.
+- Added explicit accessible colors for quiet buttons and the extension reference panel in Light mode.
+- Validation: `node --test tests/site-release-loader.test.mjs` (9/9 pass); `actionlint .github/workflows/deploy-site.yml` pass; `git diff --check` pass. Browser verified the Light theme, 390px layout, working nav toggle/aria-controls relationship, and no horizontal overflow. Screenshot capture timed out while waiting on fonts, so no screenshot evidence retained.
+- The local shared runner does not admit `/nas/Temp/repos/FireCraft`; use the required hosted PR gate for Rust workspace validation rather than bypassing runner policy.
+
+## 2026-11-27 — Cloudflare Pages preview routing
+- Fixed the post-merge deploy target: account limit is 10 Pages projects and no `firecraft-site` exists. Main updates now go to `firecraft-web` branch `marketing-review`, preserving the production WASM app.
+- Updated `robots.txt` and sitemap to the stable review URL. Added TDD assertions for the project/branch destination and sitemap host.
+- Red/green: site test initially failed on obsolete `firecraft-site`; final suite 10/10 pass. `actionlint` and `git diff --check` pass.
+- Manually deployed the first preview to `https://marketing-review-v0-3-5.firecraft-web.pages.dev`; landing page, extensions page, CSS and logo return HTTP 200. Production app branch was not changed.
+- Added the already verified deployment credential as the GitHub Actions secret after the first post-merge run showed that secret was missing. Follow-up workflow PR will verify the stable preview deployment path.
