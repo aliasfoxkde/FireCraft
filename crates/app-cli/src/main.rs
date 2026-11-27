@@ -407,7 +407,7 @@ fn run(args: &[String]) -> Result<(), CliError> {
                     continue;
                 }
                 let reply = match serde_json::from_str(trimmed) {
-                    Ok(value) => mcp::handle(&mut session, fs.clone(), &value),
+                    Ok(value) => mcp::handle(&mut session, &fs, &value),
                     Err(error) => Some(mcp::parse_error(&error.to_string())),
                 };
                 if let Some(reply) = reply {

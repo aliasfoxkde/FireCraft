@@ -48,7 +48,7 @@ const PARSE_ERROR: i64 = -32700;
 /// tool.
 pub fn handle(
     session: &mut Session,
-    fs: Rc<dyn FileSystem>,
+    fs: &Rc<dyn FileSystem>,
     request: &serde_json::Value,
 ) -> Option<serde_json::Value> {
     let id = request
@@ -80,7 +80,7 @@ pub fn handle(
         )),
         "ping" => Some(ok_reply(id, serde_json::json!({}))),
         "tools/list" => Some(ok_reply(id, tools_value())),
-        "tools/call" => Some(tool_call(session, &fs, id, request)),
+        "tools/call" => Some(tool_call(session, fs, id, request)),
         "resources/list" => Some(ok_reply(id, resources_value())),
         "resources/read" => Some(resource_read(session, id, request)),
         other => Some(error_reply(
