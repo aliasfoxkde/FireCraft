@@ -9,3 +9,4 @@ html[data-color-scheme="light"] .eyebrow,html[data-color-scheme="light"] .featur
 @media(max-width:850px){.nav-toggle{display:flex;flex-direction:column;gap:5px;padding:8px;background:none;border:0;cursor:pointer}.nav-toggle span{display:block;width:21px;height:2px;background:currentColor}.nav{display:none;position:absolute;top:77px;left:0;right:0;padding:20px 24px;background:#1d2028;border-bottom:1px solid var(--line);flex-direction:column;align-items:stretch;gap:18px}.nav.open{display:flex}.nav-github{text-align:center}}
 @media(max-width:850px) and (prefers-color-scheme:light){html[data-theme="system"] .nav{background:#f6f3ee}}
 .hero .eyebrow{letter-spacing:.7px;font-size:11px;line-height:1.5;max-width:100%}html[data-color-scheme="light"] .nav{background:#f6f3ee}
+html[data-color-scheme="light"] .button-quiet{color:#30343a;border-color:#82858d}

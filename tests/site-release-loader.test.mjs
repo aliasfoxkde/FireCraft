@@ -82,3 +82,29 @@ test("published pages reference existing local assets and sitemap routes", async
   assert.match(sitemap, /firecraft-site\.pages\.dev\/extensions\.html/);
   assert.doesNotMatch(sitemap, /features\.html|downloads\.html|gallery\.html/);
 });
+
+function contrastRatio(foreground, background) {
+  const luminance = (color) => {
+    const channels = color.match(/[0-9a-f]{2}/gi).map((value) => parseInt(value, 16) / 255);
+    const linear = channels.map((value) => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+  };
+  const values = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
+  return (values[0] + 0.05) / (values[1] + 0.05);
+}
+
+test("mobile extension navigation controls an existing nav and Light mode text is readable", async () => {
+  const html = await readFile(new URL("../site/extensions.html", import.meta.url), "utf8");
+  const styles = await readFile(new URL("../site/styles.css", import.meta.url), "utf8");
+  const extensionStyles = await readFile(new URL("../site/extensions.css", import.meta.url), "utf8");
+  const navId = html.match(/<nav[^>]*id="([^"]+)"/);
+  assert.equal(navId?.[1], "primary-nav");
+  assert.match(html, /aria-controls="primary-nav"/);
+
+  const lightButton = styles.match(/html\[data-color-scheme="light"\] \.button-quiet\{color:(#[0-9a-f]{6})/i);
+  const lightReference = extensionStyles.match(/html\[data-color-scheme="light"\] \.ext-reference\{color:(#[0-9a-f]{6})/i);
+  assert.ok(lightButton, "quiet buttons need an explicit Light-mode text color");
+  assert.ok(lightReference, "the dark reference panel needs explicit Light-mode text color");
+  assert.ok(contrastRatio(lightButton[1], "#f6f3ee") >= 4.5);
+  assert.ok(contrastRatio(lightReference[1], "#191b22") >= 4.5);
+});
