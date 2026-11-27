@@ -98,14 +98,14 @@
   ```
 - **Do:**
   1. Stop synchronous full-canvas PNG encoding on startup/every edit in the `Optimize` panel: collapse Group 4 or gate `optimize_preview` behind explicit debounce (e.g. 400 ms idle) + only run when the `Optimize` tab is actually visible & expanded!
-  2. Never recompute `compose::render` when document revision/page/frame has not changed; reuse the uploaded GPU texture across pan, zoom, hover, and UI-only repaints!
-  3. Profile frame time on both desktop (`1440x900`) and WASM (`chromium`) during continuous pan/zoom and drag; target `< 16 ms` UI frame time on desktop and smooth interaction in WASM.
-  4. Add unit test asserting idle/pan/zoom frames incur zero redundant `compose::render` calls and zero eager `optimize_preview` encodes when Optimize is collapsed.
+  2. Never recompute `compose::render` when document revision/page/frame has not changed; reuse the uploaded GPU texture across viewport drag, zoom, hover, and UI-only repaints!
+  3. Profile frame time on both desktop (`1440x900`) and WASM (`chromium`) during continuous viewport drag/zoom and object drags; target `< 16 ms` UI frame time on desktop and smooth interaction in WASM.
+  4. Add unit test asserting idle/zoom/scroll frames incur zero redundant `compose::render` calls and zero eager `optimize_preview` encodes when Optimize is collapsed.
 - **Verify:**
   ```bash
   ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo clippy -p app --all-targets -- -D warnings && cargo run -p xtask -- dist --web'
   ```
-- **Done when:** Pan, zoom, panel switching, and WASM startup feel instantaneous with zero main-thread stalls.
+- **Done when:** Viewport drag, zoom, tab switching, and WASM startup feel instantaneous with zero main-thread stalls.
 
 ---
 
@@ -117,14 +117,14 @@
   grep -rn "wants_keyboard_input\|Tab\|Key::" crates/app/src/shell/ | head -n 30
   ```
 - **Do:**
-  1. Compare shortcut dispatch in FireCraft against `/nas/Temp/repos/FireCraft-CraftAnything-Experiment` (read-only): single-key tool selection (`V`, `A`, `P`, `B`, `U`, `T`, `Z`, `H`, `K`, etc.), `Tab` workspace hide/restore toggle, `Ctrl+Z`/`Ctrl+Shift+Z`/`Ctrl+Y`, `Ctrl+C`/`V`/`X`/`D`, `Space` temporary Hand pan, `Esc` priority (close popup -> cancel drag -> clear selection), and arrow-key nudge.
+  1. Compare shortcut dispatch in FireCraft against `/nas/Temp/repos/FireCraft-CraftAnything-Experiment` (read-only): single-key tool selection (`V`, `A`, `P`, `B`, `U`, `T`, `Z`, `H`, `K`, etc.), `Tab` workspace hide/restore toggle, `Ctrl+Z`/`Ctrl+Shift+Z`/`Ctrl+Y`, `Ctrl+C`/`V`/`X`/`D`, `Space` temporary Hand drag, `Esc` priority (close popup -> cancel drag -> clear selection), and arrow-key nudge.
   2. Guard single-key shortcuts cleanly when any text input (`ctx.wants_keyboard_input()`) has focus so typing never triggers tools, while ensuring clicking the canvas always restores shortcut focus.
   3. Add unit tests for every shortcut priority and text-focus guard.
 - **Verify:**
   ```bash
   ssh fedora 'export PATH="$HOME/.cargo/bin:$PATH"; export CARGO_TARGET_DIR=/var/tmp/firecraft-target-fedora; cd /var/tmp/firecraft-int-1.0-git && git pull --ff-only && cargo test -p app && cargo clippy -p app --all-targets -- -D warnings'
   ```
-- **Done when:** Core tool, undo/redo, clipboard, `Space` pan, `Tab` toggle, and `Esc` shortcuts work reliably on native & WASM.
+- **Done when:** Core tool, undo/redo, clipboard, `Space` Hand drag, `Tab` toggle, and `Esc` shortcuts work reliably on native & WASM.
 
 ---
 

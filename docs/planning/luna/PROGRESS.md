@@ -30,8 +30,8 @@
 - [ ] `L1.7` `[LUNA]` **P0** Default theme mode to `Auto / System` (`ThemeMode::System` in `shell/mod.rs:852`)
 - [ ] `L1.8` `[LUNA]` **P0** Fix document tab switching visual active state & stable tab order (`chrome.rs:993`)
 - [ ] `L1.9` `[LUNA]` **P0** Fix canvas Z-order rendering over floating windows, menus & dialogs (`Order::Foreground` audit)
-- [ ] `L1.10` `[LUNA]` **P0** Fix canvas & WASM performance (defer/debounce Optimize PNG encode, cache composed canvas texture across pan/zoom/idle)
-- [ ] `L1.11` `[LUNA]` **P0** Align keybindings, shortcuts, `Tab` toggle, `Space` pan & focus guards with `FireCraft-CraftAnything-Experiment`
+- [ ] `L1.10` `[LUNA]` **P0** Fix canvas & WASM performance (defer/debounce Optimize PNG encode, cache composed canvas texture across scroll/zoom/idle)
+- [ ] `L1.11` `[LUNA]` **P0** Align keybindings, shortcuts, `Tab` toggle, `Space` Hand drag & focus guards with `FireCraft-CraftAnything-Experiment`
 - [ ] `L1.12` `[LUNA]` **P0** Polish menus & fix right-click context menus (canvas, layers, tabs)
 - [ ] `L1.13` `[LUNA]` **P0** Port complete Styles & Layers panels + full remaining Experiment feature diff, then merge `feat/phase1-visual-polish` -> `main`
 
@@ -121,4 +121,4 @@
 ## Active Notes & Escalations
 - **Maintainer status (2026-11-26):** Live review surfaced 10 concrete product/UX defects (`L1.6`–`L1.13` + Phase 2 Phosphor Icons) plus repository/release/Cloudflare disconnects (`docs/integration/2026-11-26-live-review-defects.md`). Maintainer plans to focus on `/nas/Temp/repos/FireCraft-CraftAnything-Experiment` next; FireCraft's backlog, receipts, and root-cause pointers are preserved cleanly here when work resumes.
 - **`fedora` WASM tooling resolved:** Static musl `trunk 0.21.14` is now installed at `fedora:~/.local/bin/trunk` and `xtask dist --web` passes natively with `chromium-browser`.
-- **Cloudflare auth note:** Local `CLOUDFLARE_BUILD_TOKEN` is active; GitHub Actions `CLOUDFLARE_API_TOKEN` was removed after returning `code: 10000` and needs updating before `deploy-site.yml` / automated Pages deploys can succeed.
+- **Cloudflare auth note:** Local `CLOUDFLARE_BUILD_TOKEN` is active; GitHub Actions `CLOUDFLARE_API_TOKEN` was removed after returning an authentication error and needs updating before `deploy-site.yml` / automated Pages deploys can succeed.
